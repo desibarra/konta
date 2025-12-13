@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Subir XML - Konta{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow border-0">
+            <div class="card-header bg-primary text-white py-3">
+                <h4 class="mb-0 text-center"><i class="bi bi-cloud-upload me-2"></i>Cargar CFDI 4.0</h4>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted text-center mb-4">
+                    Selecciona tus archivos XML descargados del SAT. El sistema procesará automáticamente las facturas y
+                    generará las pólizas contables.
+                </p>
+
+                <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
+                    {% csrf_token %}
+
+                    <div class="mb-4">
+                        <label for="{{ form.xml_files.id_for_label }}" class="form-label fw-bold">Archivos XML</label>
+                        {{ form.xml_files }}
+                        {% if form.xml_files.help_text %}
+                        <div class="form-text">{{ form.xml_files.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.xml_files.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+                            Procesar Documentos
+                        </button>
+                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="alert alert-info mt-4 shadow-sm border-0 d-flex align-items-center">
+            <i class="bi bi-info-circle-fill fs-4 me-3 text-info"></i>
+            <div>
+                <strong>Nota:</strong> Asegúrate de haber cargado las cuentas contables básicas antes de subir archivos.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

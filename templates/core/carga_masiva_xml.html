@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+
+{% block title %}Carga Masiva de XML - Konta{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white py-3">
+                <h4 class="mb-0"><i class="bi bi-cloud-upload"></i> Carga Masiva de XML</h4>
+            </div>
+            <div class="card-body p-4">
+                <p class="text-muted mb-4">
+                    Sube tus archivos XML (CFDI 4.0) para procesarlos masivamente.
+                    El sistema detectará automáticamente si son Ingresos o Egresos y evitará duplicados.
+                </p>
+
+                <form method="post" enctype="multipart/form-data" class="needs-validation">
+                    {% csrf_token %}
+
+                    <div class="mb-4">
+                        <label for="id_empresa" class="form-label fw-bold">Selecciona la Empresa</label>
+                        <select name="empresa" id="id_empresa" class="form-select" required>
+                            <option value="" selected disabled>-- Elige una empresa --</option>
+                            {% for empresa in empresas %}
+                            <option value="{{ empresa.id }}">{{ empresa.nombre }} ({{ empresa.rfc }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Los XML deben corresponder al RFC de la empresa seleccionada.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="id_xmls" class="form-label fw-bold">Archivos XML</label>
+                        <input type="file" name="xmls" id="id_xmls" class="form-control" multiple accept=".xml"
+                            required>
+                        <div class="form-text">Puedes seleccionar múltiples archivos a la vez.</div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary me-md-2">Cancelar</a>
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="bi bi-upload"></i> Procesar Archivos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if messages %}
+        <div class="mt-4">
+            {% bootstrap_messages %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

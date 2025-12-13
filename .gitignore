@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+.env.*
+
+# Django
+db.sqlite3
+*.log
+
+# OS / Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Backups
+*.zip
+*.tar.gz
+# Auditoría / Debug / Pruebas temporales
+audit_temp.py
+debug_template.py
+verify_pdf_data.py
+verify_sums.py
+xmls/

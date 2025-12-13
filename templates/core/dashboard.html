@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Dashboard - Konta{% endblock %}
+
+{% block content %}
+<div class="row align-items-center mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">Dashboard Financiero</h1>
+        <p class="text-muted">Resumen de tu actividad fiscal</p>
+    </div>
+    <div class="col-md-auto">
+        <a href="{% url 'bandeja_contabilizacion' %}" class="btn btn-outline-primary shadow-sm me-2">
+            <i class="bi bi-inbox-fill me-2"></i>Bandeja Contable
+        </a>
+        <a href="{% url 'carga_masiva_xml' %}" class="btn btn-outline-primary shadow-sm me-2">
+            <i class="bi bi-cloud-upload me-2"></i>Carga Masiva
+        </a>
+        <a href="{% url 'upload_xml' %}" class="btn btn-primary shadow-sm">
+            <i class="bi bi-plus-lg me-2"></i>Nueva Factura
+        </a>
+    </div>
+</div>
+
+<div class="card mb-4 border-0 shadow-sm bg-light">
+    <div class="card-body py-3">
+        <form method="get" class="row align-items-center g-3">
+            <div class="col-auto">
+                <label class="col-form-label fw-bold">
+                    <i class="bi bi-funnel"></i> Filtrar por empresa:
+                </label>
+            </div>
+
+            <div class="col-auto flex-grow-1">
+                <select name="empresa" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todas las empresas</option>
+
+                    {% for emp in empresas_select %}
+                    <option value="{{ emp.id }}" {% if emp.selected %}selected{% endif %}>
+                        {{ emp.nombre }} ({{ emp.rfc }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {% if empresa_id_seleccionada %}
+            <div class="col-auto">
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+                    Limpiar
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="card text-white bg-success shadow h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-opacity-75 text-white">
+                            Ingresos Totales
+                        </h6>
+                        <h2 class="fw-bold mb-0">
+                            ${{ total_ingresos|floatformat:2|intcomma }}
+                        </h2>
+                    </div>
+                    <i class="bi bi-graph-up-arrow fs-1 text-white text-opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card text-white bg-danger shadow h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-opacity-75 text-white">
+                            Egresos Totales
+                        </h6>
+                        <h2 class="fw-bold mb-0">
+                            ${{ total_egresos|floatformat:2|intcomma }}
+                        </h2>
+                    </div>
+                    <i class="bi bi-graph-down-arrow fs-1 text-white text-opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+        <div class="card bg-white shadow h-100 border-0">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-muted">
+                            Facturas Procesadas
+                        </h6>
+                        <h2 class="fw-bold mb-0 text-primary">
+                            {{ total_facturas }}
+                        </h2>
+                    </div>
+                    <i class="bi bi-files fs-1 text-muted text-opacity-25"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow border-0">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0">Facturas Recientes</h5>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Empresa</th>
+                        <th>Entidad Ext.</th>
+                        <th class="text-end">Total</th>
+                        <th>Tipo</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for factura in facturas %}
+                    <tr>
+                        <td class="text-nowrap">
+                            {{ factura.fecha|date:"d M Y" }}
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">
+                                {{ factura.empresa.nombre|truncatechars:15 }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if factura.naturaleza == 'I' %}
+                            {{ factura.receptor_nombre|truncatechars:25 }}
+                            {% else %}
+                            {{ factura.emisor_nombre|truncatechars:25 }}
+                            {% endif %}
+                        </td>
+                        <td class="text-end fw-bold">
+                            ${{ factura.total|floatformat:2|intcomma }}
+                        </td>
+                        <td>
+                            {% if factura.naturaleza == 'I' %}
+                            <span class="badge bg-success-subtle text-success">
+                                INGRESO
+                            </span>
+                            {% elif factura.naturaleza == 'E' %}
+                            <span class="badge bg-danger-subtle text-danger">
+                                EGRESO
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary">
+                                {{ factura.get_naturaleza_display }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                    Acciones
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow">
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'factura_detail' factura.uuid %}">
+                                            <i class="bi bi-eye me-2 text-primary"></i>Ver Detalle
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'descargar_xml' factura.uuid %}">
+                                            <i class="bi bi-filetype-xml me-2 text-success"></i>Descargar XML
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item" href="{% url 'ver_pdf' factura.uuid %}"
+                                            target="_blank">
+                                            <i class="bi bi-file-earmark-pdf me-2 text-danger"></i>Ver PDF
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li>
+                                        <form action="{% url 'eliminar_factura' factura.uuid %}" method="post"
+                                            class="d-inline"
+                                            onsubmit="return confirm('¿Estás seguro de eliminar esta factura? Se borrará el registro y el archivo físico permanentemente.');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="dropdown-item text-danger">
+                                                <i class="bi bi-trash me-2"></i>Eliminar
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                            No hay facturas registradas. ¡Sube tus XML!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

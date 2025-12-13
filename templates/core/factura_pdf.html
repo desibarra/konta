@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load static %}
+
+<!--
+    ARQUITECTURA DE INFORMACIÓN:
+    1. Este reporte muestra EXCLUSIVAMENTE datos fiscales del CFDI (XML).
+    2. Importes obtenidos directamente del modelo Factura (populado desde XML).
+    3. NO se realizan cálculos aritméticos en este template.
+    4. NO se mezcla información contable (Pólizas/Cuentas).
+-->
+
+{% block title %}Factura {{ factura.uuid|slice:":8" }}{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <!-- Non-printable Actions -->
+    <div class="row mb-4 d-print-none">
+        <div class="col">
+            <button onclick="window.print()" class="btn btn-primary shadow-sm">
+                <i class="bi bi-printer me-2"></i> Imprimir / Guardar PDF
+            </button>
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary ms-2">
+                <i class="bi bi-arrow-left me-2"></i> Volver al Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Invoice Container -->
+    <div class="card border-0 shadow-none pdf-container">
+        <div class="card-body p-5">
+
+            <!-- Header -->
+            <div class="row mb-5 align-items-center border-bottom pb-4">
+                <div class="col-6">
+                    {% if factura.empresa.logo %}
+                    <img src="{{ factura.empresa.logo.url }}" alt="Logo" height="80" class="mb-2">
+                    {% else %}
+                    <!-- Fallback Logo / Brand Name -->
+                    <div class="h2 text-primary fw-bold mb-0">
+                        <i class="bi bi-wallet2 me-2"></i>Konta
+                    </div>
+                    {% endif %}
+                    <div class="text-muted small mt-2">Sistema de Contabilidad Inteligente</div>
+                </div>
+                <div class="col-6 text-end">
+                    <h3 class="fw-bold mb-1 text-dark">FACTURA</h3>
+                    <div class="text-muted font-monospace mb-1">{{ factura.uuid }}</div>
+                    <div class="badge bg-light text-dark border">
+                        Tipo: {{ factura.get_tipo_comprobante_display }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Participants -->
+            <div class="row mb-5">
+                <div class="col-6">
+                    <h6 class="text-uppercase text-secondary small fw-bold mb-3">Emisor</h6>
+                    <h5 class="fw-bold mb-1">{{ factura.emisor_nombre }}</h5>
+                    <p class="mb-0 text-muted">{{ factura.emisor_rfc }}</p>
+                    <p class="mb-0 small text-muted">{{ factura.empresa.regimen_fiscal }}</p>
+                </div>
+                <div class="col-6 text-end">
+                    <h6 class="text-uppercase text-secondary small fw-bold mb-3">Receptor</h6>
+                    <h5 class="fw-bold mb-1">{{ factura.receptor_nombre }}</h5>
+                    <p class="mb-0 text-muted">{{ factura.receptor_rfc }}</p>
+                </div>
+            </div>
+
+            <!-- Concepts Table -->
+            <div class="table-responsive mb-5">
+                <table class="table table-striped table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col" class="py-3">Descripción</th>
+                            <th scope="col" class="text-end py-3">Cant.</th>
+                            <th scope="col" class="text-end py-3">Precio Unit.</th>
+                            <th scope="col" class="text-end py-3">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody class="border-top-0">
+                        {% for concepto in factura.conceptos.all %}
+                        <tr>
+                            <td class="py-3">
+                                <div class="fw-bold">{{ concepto.descripcion }}</div>
+                                <div class="small text-muted font-monospace">{{ concepto.clave_prod_serv }}</div>
+                            </td>
+                            <td class="text-end py-3">{{ concepto.cantidad|floatformat:2 }}</td>
+                            <td class="text-end py-3">$ {{ concepto.valor_unitario|floatformat:2|intcomma }}</td>
+                            <td class="text-end py-3 fw-bold text-dark">$ {{ concepto.importe|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Totals Section -->
+            <div class="row mb-5">
+                <div class="col-md-5 offset-md-7">
+                    <table class="table table-borderless table-sm">
+
+                        <!-- Subtotal -->
+                        <tr>
+                            <td class="text-end text-muted pb-1">Subtotal:</td>
+                            <td class="text-end fw-bold pb-1 text-dark" style="width: 140px;">
+                                $ {{ factura.subtotal|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+
+                        <!-- Descuento -->
+                        {% if factura.descuento > 0 %}
+                        <tr>
+                            <td class="text-end text-muted pb-1">Descuento:</td>
+                            <td class="text-end text-danger pb-1">
+                                $ {{ factura.descuento|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% endif %}
+
+                        <!-- IVA Trasladado -->
+                        {% if factura.total_impuestos_trasladados > 0 %}
+                        <tr>
+                            <td class="text-end text-muted pb-1">IVA Trasladado:</td>
+                            <td class="text-end pb-1">
+                                $ {{ factura.total_impuestos_trasladados|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% endif %}
+
+                        <!-- IVA Retenido -->
+                        {% if factura.total_impuestos_retenidos > 0 %}
+                        <tr>
+                            <td class="text-end text-muted pb-1">IVA Retenido:</td>
+                            <td class="text-end text-danger pb-1">
+                                $ {{ factura.total_impuestos_retenidos|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% endif %}
+
+                        <!-- Total -->
+                        <tr class="border-top border-dark">
+                            <td class="text-end pt-3 h5 fw-normal">Total:</td>
+                            <td class="text-end pt-3 h4 fw-bold text-primary">
+                                $ {{ factura.total|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+
+                    </table>
+                </div>
+            </div>
+
+            <!-- Fiscal Footer -->
+            <div class="mt-auto pt-4 border-top">
+                <div class="row text-muted small">
+                    <div class="col-md-8">
+                        <div class="mb-1"><strong>UUID:</strong> <span class="font-monospace">{{ factura.uuid }}</span>
+                        </div>
+                        <div class="mb-1"><strong>Fecha de Emisión:</strong> {{ factura.fecha|date:"d/m/Y H:i" }}</div>
+                        <div class="mb-1"><strong>Régimen Fiscal Emisor:</strong> {{
+                            factura.empresa.get_regimen_fiscal_display|default:"No especificado" }}</div>
+                    </div>
+                    <div class="col-md-4 text-end align-self-end">
+                        <p class="mb-0 fst-italic">Este documento es una representación impresa de un CFDI.</p>
+                        <p class="mb-0">No constituye un comprobante fiscal digital.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

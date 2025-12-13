@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Factura {{ factura.uuid|slice:":8" }} - Konta{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Factura {{ factura.uuid|slice:":8" }}...</li>
+    </ol>
+</nav>
+
+<div class="row">
+    <!-- Columna 1: Datos del CFDI (Fiscal) -->
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm h-100 border-0">
+            <div class="card-header bg-white border-bottom fw-bold py-3 text-primary">
+                📄 Datos del CFDI
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-borderless table-sm">
+                        <tr>
+                            <td class="text-muted w-25">Tipo:</td>
+                            <td class="fw-bold">
+                                {% if factura.tipo_comprobante == 'I' %}Ingreso{% elif factura.tipo_comprobante == 'E'
+                                %}Egreso{% else %}{{ factura.tipo_comprobante }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Fecha:</td>
+                            <td>{{ factura.fecha|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Folio Fiscal:</td>
+                            <td class="text-break font-monospace small">{{ factura.uuid }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <hr class="text-muted opacity-25">
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="text-muted small text-uppercase fw-bold">Emisor</label>
+                        <div class="fw-bold">{{ factura.emisor_nombre }}</div>
+                        <div class="text-muted small">{{ factura.emisor_rfc }}</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="text-muted small text-uppercase fw-bold">Receptor</label>
+                        <div class="fw-bold">{{ factura.receptor_nombre }}</div>
+                        <div class="text-muted small">{{ factura.receptor_rfc }}</div>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-3 bg-light rounded-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Subtotal:</span>
+                        <span class="fw-bold">${{ factura.subtotal|floatformat:2|intcomma }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1 text-muted">
+                        <span>Descuento:</span>
+                        <span>-${{ factura.descuento|floatformat:2|intcomma }}</span>
+                    </div>
+                    {% if factura.total_impuestos_trasladados > 0 %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Impuestos Trasladados:</span>
+                        <span>${{ factura.total_impuestos_trasladados|floatformat:2|intcomma }}</span>
+                    </div>
+                    {% endif %}
+                    {% if factura.total_impuestos_retenidos > 0 %}
+                    <div class="d-flex justify-content-between mb-1 text-danger">
+                        <span>Impuestos Retenidos:</span>
+                        <span>-${{ factura.total_impuestos_retenidos|floatformat:2|intcomma }}</span>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    <div class="d-flex justify-content-between h5 text-primary">
+                        <span class="fw-bold">Total:</span>
+                        <span class="fw-bold">${{ factura.total|floatformat:2|intcomma }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Columna 2: Información Contable (Póliza) -->
+    <!-- Clase d-print-none OBLIGATORIA para no salir en impresión/PDF -->
+    <div class="col-lg-6 mb-4 d-print-none">
+        <div class="card shadow-sm h-100 border-0">
+            <div class="card-header bg-white border-bottom fw-bold py-3 text-success">
+                📘 Información Contable
+            </div>
+            <div class="card-body">
+                {% if factura.poliza %}
+                <div class="mb-3 d-flex justify-content-between align-items-center">
+                    <span class="badge bg-light text-dark border">{{ factura.poliza.descripcion }}</span>
+
+                    <!-- Indicador de Balance -->
+                    {% if factura.poliza.total_debe == factura.poliza.total_haber %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                        ✅ Póliza balanceada
+                    </span>
+                    {% else %}
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                        ⚠️ Póliza descuadrada
+                    </span>
+                    {% endif %}
+                </div>
+                <div class="text-end text-muted small mb-2">
+                    Fecha Póliza: {{ factura.poliza.fecha|date:"d/m/Y" }}
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm align-middle">
+                        <thead class="table-success">
+                            <tr>
+                                <th>Cuenta</th>
+                                <th class="text-end">Debe</th>
+                                <th class="text-end">Haber</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mov in factura.poliza.movimientos.all %}
+                            <tr>
+                                <td>
+                                    <div class="fw-bold">{{ mov.cuenta.codigo }}</div>
+                                    <div class="small text-muted">{{ mov.cuenta.nombre }}</div>
+                                </td>
+                                <td class="text-end font-monospace">
+                                    {% if mov.debe > 0 %}${{ mov.debe|floatformat:2|intcomma }}{% endif %}
+                                </td>
+                                <td class="text-end font-monospace">
+                                    {% if mov.haber > 0 %}${{ mov.haber|floatformat:2|intcomma }}{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="fw-bold border-top">
+                            <tr>
+                                <td>Sumas Iguales</td>
+                                <td
+                                    class="text-end {% if factura.poliza.total_debe == factura.poliza.total_haber %}text-success{% else %}text-danger{% endif %}">
+                                    ${{ factura.poliza.total_debe|floatformat:2|intcomma }}
+                                </td>
+                                <td
+                                    class="text-end {% if factura.poliza.total_debe == factura.poliza.total_haber %}text-success{% else %}text-danger{% endif %}">
+                                    ${{ factura.poliza.total_haber|floatformat:2|intcomma }}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    No se generó póliza contable para esta factura.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
