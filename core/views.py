@@ -41,7 +41,7 @@ def upload_xml(request):
     # Obtener empresa activa de sesión
     active_empresa_id = request.session.get('active_empresa_id')
     if not active_empresa_id:
-        messages.warning(request, "Selecciona una empresa activa antes de subir archivos.")
+        # Dashboard ya muestra mensaje global - no duplicar
         return redirect('dashboard')
     
     try:
@@ -94,7 +94,7 @@ def carga_masiva_xml(request):
     active_id = get_active_empresa_id(request)
     # Validar contexto
     if not active_id:
-        messages.warning(request, "Selecciona una empresa primero.")
+        # Dashboard ya muestra mensaje global - no duplicar
         return redirect('dashboard')
 
     if request.method == "POST":
