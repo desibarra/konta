@@ -11,9 +11,16 @@
                 <h4 class="mb-0 text-center"><i class="bi bi-cloud-upload me-2"></i>Cargar CFDI 4.0</h4>
             </div>
             <div class="card-body p-4">
+                <div class="alert alert-info d-flex align-items-center mb-4">
+                    <i class="bi bi-building-check fs-4 me-3"></i>
+                    <div>
+                        <strong>Empresa activa:</strong> {{ empresa.nombre }}
+                    </div>
+                </div>
+
                 <p class="text-muted text-center mb-4">
-                    Selecciona tus archivos XML descargados del SAT. El sistema procesará automáticamente las facturas y
-                    generará las pólizas contables.
+                    Selecciona tus archivos XML (CFDI 4.0) descargados del SAT. El sistema procesará y organizará
+                    automáticamente tus documentos fiscales.
                 </p>
 
                 <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate>
@@ -30,9 +37,22 @@
                         {% endfor %}
                     </div>
 
+                    <script>
+                        // Add multiple and accept attributes to file input
+                        // Django's FileField doesn't support these in widget attrs
+                        document.addEventListener('DOMContentLoaded', function () {
+                            const fileInput = document.querySelector('input[type="file"][name="xml_files"]');
+                            if (fileInput) {
+                                fileInput.setAttribute('multiple', '');
+                                fileInput.setAttribute('accept', '.xml');
+                                fileInput.classList.add('form-control');
+                            }
+                        });
+                    </script>
+
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary btn-lg shadow-sm">
-                            Procesar Documentos
+                            <i class="bi bi-cloud-upload me-2"></i>Procesar Documentos
                         </button>
                         <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
                             Cancelar
@@ -45,7 +65,8 @@
         <div class="alert alert-info mt-4 shadow-sm border-0 d-flex align-items-center">
             <i class="bi bi-info-circle-fill fs-4 me-3 text-info"></i>
             <div>
-                <strong>Nota:</strong> Asegúrate de haber cargado las cuentas contables básicas antes de subir archivos.
+                <strong>Tip:</strong> Los archivos XML se procesarán de forma segura. Puedes subir múltiples documentos
+                a la vez usando <kbd>Ctrl</kbd> + click (o <kbd>Cmd</kbd> + click en Mac).
             </div>
         </div>
     </div>
