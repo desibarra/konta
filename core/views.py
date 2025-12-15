@@ -51,17 +51,21 @@ def switch_empresa(request, empresa_id):
     return redirect(next_url)
 
 @login_required
-        return redirect('dashboard')
+@require_active_empresa
+def upload_xml(request):
+    """Vista para subir archivos XML CFDI"""
+    # El decorador ya validó permisos e inyectó request.empresa
+    empresa = request.empresa
     
-    # Validar Permiso y Rol
+    # Validar Permiso y Rol (opcional - ya validado por decorator)
     try:
         ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa=empresa)
         if ue.rol == 'lectura':
             messages.error(request, "Tu rol de Lectura no permite subir archivos.")
-            return redirect('dashboard')
+            return redirect('dashboard') # Assuming 'dashboard' is the default redirect
     except UsuarioEmpresa.DoesNotExist:
-        messages.error(request, "No tienes permiso para cargar en esta empresa.")
-        return redirect('dashboard')
+        messages.error(request, "No tienes permisos en esta empresa.")
+        return redirect('dashboard') # Assuming 'dashboard' is the default redirect
     
     if request.method == 'POST':
         form = UploadXMLForm(request.POST, request.FILES)
