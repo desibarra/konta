@@ -152,19 +152,24 @@ class DashboardView(ListView):
     context_object_name = 'facturas'
     paginate_by = 20
     
-    def get_queryset(self):
-        # AUTO-SELECT: Si no hay empresa activa, seleccionar la primera disponible
-        active_id = self.request.session.get('active_empresa_id')
+    def dispatch(self, request, *args, **kwargs):
+        # AUTO-SELECT: Ejecutar ANTES de cualquier otra cosa
+        active_id = request.session.get('active_empresa_id')
         if not active_id:
             # Intentar auto-seleccionar la primera empresa del usuario
-            first_empresa_rel = UsuarioEmpresa.objects.filter(usuario=self.request.user).select_related('empresa').first()
+            first_empresa_rel = UsuarioEmpresa.objects.filter(usuario=request.user).select_related('empresa').first()
             if first_empresa_rel:
-                self.request.session['active_empresa_id'] = first_empresa_rel.empresa.id
-                self.request.session['active_empresa_nombre'] = first_empresa_rel.empresa.nombre
-                self.request.session.modified = True
-                active_id = first_empresa_rel.empresa.id
-            else:
-                return Factura.objects.none()  # Sin empresas asignadas
+                request.session['active_empresa_id'] = first_empresa_rel.empresa.id
+                request.session['active_empresa_nombre'] = first_empresa_rel.empresa.nombre
+                request.session.modified = True
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def get_queryset(self):
+        # Filtro Global por Sesión (empresa ya seleccionada en dispatch)
+        active_id = self.request.session.get('active_empresa_id')
+        if not active_id:
+            return Factura.objects.none()
             
         return Factura.objects.filter(empresa_id=active_id).select_related('empresa').order_by('-fecha_subida')
     
