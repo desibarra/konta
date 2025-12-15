@@ -164,7 +164,7 @@ class DashboardView(ListView):
         if not active_id:
             return Factura.objects.none()
             
-        return Factura.objects.filter(empresa_id=active_id).select_related('empresa').order_by('-fecha_subida')
+        return Factura.objects.filter(empresa_id=active_id).select_related('empresa').order_by('-fecha')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
