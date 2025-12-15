@@ -24,19 +24,16 @@
                             href="{% url 'dashboard' %}">Dashboard</a></li>
                     {% if user.is_authenticated and available_empresas %}
                     <li class="nav-item dropdown ms-3">
-                        <a class="nav-link dropdown-toggle active fw-bold border border-light rounded px-3" href="#"
-                            id="empresaDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button"
+                            data-bs-toggle="dropdown">
                             {% if active_empresa %}<i class="bi bi-building-check"></i> {{ active_empresa.nombre }}{%
                             else %}<i class="bi bi-building-exclamation"></i> Seleccionar Empresa{% endif %}
-                        </a>
-                        <ul class="dropdown-menu shadow" aria-labelledby="empresaDropdown">
-                            {% for emp in available_empresas %}<li><a
-                                    class="dropdown-item {% if emp.selected %}active{% endif %}"
-                                    href="{% url 'switch_empresa' emp.id %}">{{ emp.nombre }}{% if emp.selected %}<i
-                                        class="bi bi-check float-end"></i>{% endif %}</a></li>{% endfor %}
-                            {% if not available_empresas %}<li><span class="dropdown-item text-mut
-
-ed">Sin empresas asignadas</span></li>{% endif %}
+                        </button>
+                        <ul class="dropdown-menu">
+                            {% for emp in available_empresas %}
+                            <li><a class="dropdown-item" href="{% url 'switch_empresa' emp.id %}">{{ emp.nombre }}{% if
+                                    emp.selected %} <i class="bi bi-check float-end"></i>{% endif %}</a></li>
+                            {% endfor %}
                         </ul>
                     </li>
                     {% endif %}
