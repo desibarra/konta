@@ -288,43 +288,44 @@ class DashboardView(ListView):
         context['empresa_id_seleccionada'] = active_id
         
         if active_id:
-            # Queryset total de la empresa FILTRADO POR FECHAS
+            # CAMBIO CRÍTICO: Sumar directamente de Factura (flujo operativo)
+            # NO de MovimientoPoliza (solo contabilizadas)
+            # Esto permite ver totales INMEDIATAMENTE después de carga masiva
+            
+            # Queryset filtrado por fechas para totales
             qs_total = Factura.objects.filter(
                 empresa_id=active_id,
                 fecha__date__gte=fecha_inicio,
                 fecha__date__lte=fecha_fin
             )
             
-            # Calcular totales SOLO de facturas contabilizadas en el rango
-            movs_qs = MovimientoPoliza.objects.filter(
-                poliza__factura__in=qs_total,
-                poliza__factura__estado_contable='CONTABILIZADA',
-                poliza__factura__naturaleza__in=['I', 'E']
-            )
+            # INGRESOS: Suma directa de Facturas con naturaleza 'I'
+            total_ingresos = qs_total.filter(
+                naturaleza='I'
+            ).aggregate(
+                total=Sum('total')
+            )['total'] or 0
             
-            totales = movs_qs.values('poliza__factura__naturaleza').annotate(
-                total_debe=Sum('debe'),
-                total_haber=Sum('haber')
-            )
+            # EGRESOS: Suma directa de Facturas con naturaleza 'E'
+            total_egresos = qs_total.filter(
+                naturaleza='E'
+            ).aggregate(
+                total=Sum('total')
+            )['total'] or 0
             
-            total_ingresos = 0
-            total_egresos = 0
+            # CONTADOR: Total de facturas en el periodo
+            total_facturas = qs_total.count()
             
-            for t in totales:
-                nat = t['poliza__factura__naturaleza']
-                if nat == 'I':
-                    total_ingresos += t['total_haber'] or 0
-                elif nat == 'E':
-                    total_egresos += t['total_debe'] or 0
-                    
             context['total_ingresos'] = total_ingresos
             context['total_egresos'] = total_egresos
             context['utilidad_neta'] = total_ingresos - total_egresos
+            context['total_facturas'] = total_facturas
         
         else:
              context['total_ingresos'] = 0
              context['total_egresos'] = 0
              context['utilidad_neta'] = 0
+             context['total_facturas'] = 0
 
         return context
     

@@ -312,6 +312,7 @@
                         </li>
                         {% endif %}
 
+
                         <!-- Números de Página -->
                         {% for num in page_obj.paginator.page_range %}
                         {% if page_obj.number == num %}
@@ -326,6 +327,7 @@
                             </li>
                             {% endif %}
                             {% endfor %}
+
 
                             <!-- Botón Siguiente -->
                             {% if page_obj.has_next %}

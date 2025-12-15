@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Estado de Resultados</h2>
+            <h5 class="text-muted">{{ empresa.nombre }}</h5>
+            <small class="text-muted">Del {{ fecha_inicio }} al {{ fecha_fin }}</small>
+        </div>
+        <div>
+            <a href="javascript:window.print()" class="btn btn-outline-secondary">
+                <i class="bi bi-printer"></i> Imprimir
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card mb-4 shadow-sm d-print-none">
+        <div class="card-body p-3">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Fecha Inicio</label>
+                    <input type="date" class="form-control" name="fecha_inicio" value="{{ fecha_inicio }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Fecha Fin</label>
+                    <input type="date" class="form-control" name="fecha_fin" value="{{ fecha_fin }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- INGRESOS -->
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm border-success">
+                <div class="card-header bg-success text-white fw-bold">Ingresos</div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            {% for cta in ingresos %}
+                            <tr>
+                                <td>{{ cta.nombre }}</td>
+                                <td class="text-end font-monospace">{{ cta.saldo|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Sin ingresos en el periodo</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td>Total Ingresos</td>
+                                <td class="text-end font-monospace">{{ total_ingresos|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- EGRESOS -->
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm border-danger">
+                <div class="card-header bg-danger text-white fw-bold">Egresos</div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            {% for cta in egresos %}
+                            <tr>
+                                <td>{{ cta.nombre }}</td>
+                                <td class="text-end font-monospace">{{ cta.saldo|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Sin egresos en el periodo</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td>Total Egresos</td>
+                                <td class="text-end font-monospace">{{ total_egresos|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESULTADO FINAL -->
+    <div class="card shadow mt-3 {% if utilidad_neta >= 0 %}border-primary{% else %}border-danger{% endif %}">
+        <div class="card-body text-center">
+            <h4 class="mb-0">
+                Utilidad Neta:
+                <span
+                    class="font-monospace fw-bold {% if utilidad_neta >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                    $ {{ utilidad_neta|floatformat:2|intcomma }}
+                </span>
+            </h4>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

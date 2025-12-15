@@ -1,0 +1,14 @@
+PRUEBA SIMPLE: Haz click en el dropdown "KOPPARA" y selecciona "KOPPARA".
+
+Luego mira la consola del servidor (donde corre python manage.py runserver).
+
+¿Ves este mensaje?
+
+🔥 SWITCH_EMPRESA EJECUTADO
+   User: admin
+   Empresa ID: 1
+
+SI VES EL MENSAJE: El dropdown funciona, solo falta que la sesión persista
+SI NO VES NADA: El dropdown NO está ejecutando la vista
+
+Por favor reporta qué ves en la consola.

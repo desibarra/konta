@@ -44,17 +44,54 @@ class Empresa(models.Model):
     class Meta:
         verbose_name_plural = "Empresas"
 
+class UsuarioEmpresa(models.Model):
+    ROLES = (
+        ('admin', 'Administrador'),
+        ('contador', 'Contador'),
+        ('lectura', 'Lectura'),
+    )
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='empresas_asignadas')
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='usuarios_asignados')
+    rol = models.CharField(max_length=10, choices=ROLES, default='lectura')
+    
+    class Meta:
+        unique_together = ('usuario', 'empresa')
+        verbose_name = "Asignación de Usuario"
+        verbose_name_plural = "Usuarios por Empresa"
+        
+    def __str__(self):
+        return f"{self.usuario.username} - {self.empresa.nombre} ({self.get_rol_display()})"
+
 
 class CuentaContable(models.Model):
+    TIPO_CHOICES = (
+        ('ACTIVO', 'Activo'),
+        ('PASIVO', 'Pasivo'),
+        ('CAPITAL', 'Capital'),
+        ('INGRESO', 'Ingreso'),
+        ('COSTO', 'Costo'),
+        ('GASTO', 'Gasto'),
+    )
+    NATURALEZA_CHOICES = (
+        ('D', 'Deudora'),
+        ('A', 'Acreedora'),
+    )
+
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='cuentas')
     codigo = models.CharField(max_length=20)
     nombre = models.CharField(max_length=200)
-    es_deudora = models.BooleanField(default=True)  # Naturaleza deudora
+    # Se reemplazará el booleano es_deudora por naturaleza explícita
+    # Se recomienda mantener es_deudora como property o migrarlo.
+    # Para consistencia con engine nuevo:
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES, default='ACTIVO')
+    naturaleza = models.CharField(max_length=1, choices=NATURALEZA_CHOICES, default='D')
     
+    es_deudora = models.BooleanField(default=True)  # Legacy
+
     class Meta:
         unique_together = ('empresa', 'codigo')
         verbose_name_plural = "Cuentas Contables"
-    
+
     def __str__(self):
         return f"{self.codigo} - {self.nombre} ({self.empresa.rfc})"
 
@@ -98,54 +135,63 @@ class Factura(models.Model):
     naturaleza = models.CharField(max_length=1, choices=NATURALEZA_CHOICES, default='C')
     estado_contable = models.CharField(max_length=15, choices=ESTADO_CONTABLE_CHOICES, default='PENDIENTE')
     
-    archivo_xml = models.FileField(upload_to='xmls/', null=True, blank=True)
-    fecha_subida = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ('empresa', 'uuid')
-        verbose_name_plural = "Facturas"
-    
     def __str__(self):
-        return f"{self.uuid} - {self.naturaleza} - {self.total}"
-
+        return f"{self.uuid} - {self.emisor_nombre}"
 
 class Concepto(models.Model):
     factura = models.ForeignKey(Factura, on_delete=models.CASCADE, related_name='conceptos')
-    clave_prod_serv = models.CharField(max_length=20, blank=True)
-    cantidad = models.DecimalField(max_digits=12, decimal_places=4)
-    descripcion = models.CharField(max_length=1000)
+    clave_prod_serv = models.CharField(max_length=20)
+    descripcion = models.TextField()
+    cantidad = models.DecimalField(max_digits=14, decimal_places=2)
     valor_unitario = models.DecimalField(max_digits=14, decimal_places=2)
     importe = models.DecimalField(max_digits=14, decimal_places=2)
-    impuestos_trasladados = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    
+
     def __str__(self):
         return self.descripcion[:50]
 
-
 class Poliza(models.Model):
-    factura = models.OneToOneField(Factura, on_delete=models.CASCADE, related_name="poliza")
-    fecha = models.DateField()
-    descripcion = models.CharField(max_length=500)
-    creada_en = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f"Póliza {self.id} - {self.factura}"
+    factura = models.OneToOneField(Factura, on_delete=models.CASCADE, related_name='poliza')
+    fecha = models.DateTimeField()
+    descripcion = models.CharField(max_length=255)
+    # Trazabilidad de Auditoría
+    plantilla_usada = models.ForeignKey('PlantillaPoliza', on_delete=models.SET_NULL, null=True, blank=True, related_name='polizas_generadas', help_text="Plantilla utilizada para generar esta póliza")
     
     @property
     def total_debe(self):
-        return sum(m.debe for m in self.movimientos.all())
-        
+        return sum(m.debe for m in self.movimientopoliza_set.all())
+
     @property
     def total_haber(self):
-        return sum(m.haber for m in self.movimientos.all())
+        return sum(m.haber for m in self.movimientopoliza_set.all())
 
+    def __str__(self):
+        return f"Póliza {self.id} - {self.fecha.date()}"
 
 class MovimientoPoliza(models.Model):
-    poliza = models.ForeignKey(Poliza, on_delete=models.CASCADE, related_name='movimientos')
-    cuenta = models.ForeignKey(CuentaContable, on_delete=models.PROTECT)
+    poliza = models.ForeignKey(Poliza, on_delete=models.CASCADE)
+    cuenta = models.ForeignKey(CuentaContable, on_delete=models.CASCADE)
     debe = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     haber = models.DecimalField(max_digits=14, decimal_places=2, default=0)
-    descripcion = models.CharField(max_length=300, blank=True)
-    
+    descripcion = models.CharField(max_length=255, blank=True)
+
     def __str__(self):
-        return f"{self.cuenta.codigo} - Debe: {self.debe} Haber: {self.haber}"
+        return f"{self.cuenta.codigo} | D:{self.debe} H:{self.haber}"
+
+class PlantillaPoliza(models.Model):
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='plantillas')
+    nombre = models.CharField(max_length=100)
+    tipo_factura = models.CharField(max_length=1, choices=Factura.TIPO_CHOICES)
+    
+    # Cuentas Contables Configurables
+    cuenta_flujo = models.ForeignKey(CuentaContable, on_delete=models.CASCADE, related_name='plantillas_flujo', help_text="Cliente/Banco (Ingreso) o Proveedor/Banco (Egreso)")
+    cuenta_provision = models.ForeignKey(CuentaContable, on_delete=models.CASCADE, related_name='plantillas_provision', help_text="Ventas (Ingreso) o Gasto/Costo (Egreso)")
+    cuenta_impuesto = models.ForeignKey(CuentaContable, on_delete=models.CASCADE, related_name='plantillas_impuesto', null=True, blank=True, help_text="IVA Trasladado (Ingreso) o IVA Acreditable (Egreso)")
+    
+    es_default = models.BooleanField(default=False, help_text="Usar automáticamente para este tipo de factura")
+
+    class Meta:
+        verbose_name = "Plantilla Contable"
+        verbose_name_plural = "Plantillas Contables"
+
+    def __str__(self):
+        return f"{self.nombre} ({self.get_tipo_factura_display()})"

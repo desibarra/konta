@@ -1,28 +1,33 @@
+"""
+Signals para automatizar la inicialización de empresas
+"""
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from .models import Empresa, CuentaContable
+from core.models import Empresa
+from core.services.seeder import inicializar_empresa
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 @receiver(post_save, sender=Empresa)
-def crear_cuentas_basicas(sender, instance, created, **kwargs):
+def auto_inicializar_empresa(sender, instance, created, **kwargs):
     """
-    Crea automáticamente las cuentas contables básicas cuando se crea una nueva Empresa.
+    Signal que se ejecuta automáticamente cuando se crea una nueva empresa.
+    Inicializa el catálogo de cuentas y plantillas de pólizas.
+    
+    Args:
+        sender: Modelo Empresa
+        instance: Instancia de la empresa creada
+        created: True si es una nueva empresa, False si es actualización
     """
     if created:
-        cuentas_base = [
-            {'codigo': '102', 'nombre': 'Bancos', 'es_deudora': True},
-            {'codigo': '105', 'nombre': 'Clientes', 'es_deudora': True},
-            {'codigo': '118', 'nombre': 'IVA pendiente de pago', 'es_deudora': True},
-            {'codigo': '201', 'nombre': 'Proveedores', 'es_deudora': False},
-            {'codigo': '209', 'nombre': 'IVA por cobrar', 'es_deudora': False},
-            {'codigo': '401', 'nombre': 'Ventas / Ingresos', 'es_deudora': False},
-            {'codigo': '600', 'nombre': 'Gastos generales', 'es_deudora': True},
-        ]
-        
-        print(f"✨ Generando cuentas contables automáticas para: {instance.nombre}")
-        
-        for c in cuentas_base:
-            CuentaContable.objects.get_or_create(
-                empresa=instance,
-                codigo=c['codigo'],
-                defaults={'nombre': c['nombre'], 'es_deudora': c['es_deudora']}
-            )
+        logger.info(f"🔔 Signal: Nueva empresa creada - {instance.nombre}")
+        try:
+            inicializar_empresa(instance)
+            logger.info(f"✅ Empresa {instance.nombre} inicializada automáticamente")
+        except Exception as e:
+            logger.error(f"❌ Error al inicializar empresa {instance.nombre}: {e}")
+            # No lanzamos la excepción para no bloquear la creación de la empresa
+            # El admin puede ejecutar la inicialización manualmente si falla

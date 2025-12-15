@@ -270,8 +270,7 @@ def procesar_xml_cfdi(archivo_xml, archivo_nombre, empresa):
             cantidad=c_cant,
             descripcion=c_desc,
             valor_unitario=c_unit,
-            importe=c_imp,
-            impuestos_trasladados=c_tras_total
+            importe=c_imp
         )
     
     return factura, created

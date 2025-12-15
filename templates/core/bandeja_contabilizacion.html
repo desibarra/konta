@@ -16,7 +16,7 @@
                 <h5 class="mb-0">Facturas Pendientes</h5>
             </div>
             <div class="col-auto">
-                <span class="badge bg-primary rounded-pill">{{ facturas|length }} Pendientes</span>
+                <span class="badge bg-primary rounded-pill">{{ facturas_pendientes|length }} Pendientes</span>
             </div>
         </div>
     </div>
@@ -30,11 +30,11 @@
                         <th>Entidad</th>
                         <th>Naturaleza</th>
                         <th class="text-end">Total</th>
-                        <th class="text-end">Acciones</th>
+                        <th class="text-end" style="min-width: 250px;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for f in facturas %}
+                    {% for f in facturas_pendientes %}
                     <tr>
                         <td>{{ f.fecha|date:"d M Y" }}</td>
                         <td>
@@ -58,10 +58,20 @@
                             ${{ f.total|floatformat:2|intcomma }}
                         </td>
                         <td class="text-end">
-                            <form action="{% url 'contabilizar_factura' f.uuid %}" method="post">
+                            <form action="{% url 'contabilizar_factura' f.uuid %}" method="post"
+                                class="d-flex justify-content-end align-items-center gap-2">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-journal-check me-1"></i> Contabilizar
+                                <select name="plantilla_id" class="form-select form-select-sm" style="max-width: 180px;"
+                                    title="Seleccionar Plantilla Contable">
+                                    <option value="">-- Auto --</option>
+                                    {% for p in plantillas %}
+                                    {% if p.tipo_factura == f.naturaleza %}
+                                    <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+                                    <i class="bi bi-journal-check"></i>
                                 </button>
                             </form>
                         </td>

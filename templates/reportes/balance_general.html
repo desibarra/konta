@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% load django_bootstrap5 %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Balance General</h2>
+            <h5 class="text-muted">{{ empresa.nombre }}</h5>
+            <small class="text-muted">Al {{ fecha_corte }}</small>
+        </div>
+        <div>
+            <a href="javascript:window.print()" class="btn btn-outline-secondary">
+                <i class="bi bi-printer"></i> Imprimir
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtro -->
+    <div class="card mb-4 shadow-sm d-print-none">
+        <div class="card-body p-3">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Fecha de Corte</label>
+                    <input type="date" class="form-control" name="fecha_corte" value="{{ fecha_corte }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">Actualizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- COLUMNA IZQUIERDA: ACTIVOS -->
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 shadow-sm border-primary">
+                <div class="card-header bg-primary text-white fw-bold">ACTIVOS</div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            {% for cta in activos %}
+                            <tr>
+                                <td>{{ cta.nombre }}</td>
+                                <td class="text-end font-monospace">{{ cta.saldo|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Sin activos registrados</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light fw-bold text-primary">
+                            <tr>
+                                <td>TOTAL ACTIVO</td>
+                                <td class="text-end font-monospace">{{ total_activo|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: PASIVO + CAPITAL -->
+        <div class="col-md-6 mb-3">
+            <!-- PASIVOS -->
+            <div class="card shadow-sm border-warning mb-3">
+                <div class="card-header bg-warning text-dark fw-bold">PASIVOS</div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            {% for cta in pasivos %}
+                            <tr>
+                                <td>{{ cta.nombre }}</td>
+                                <td class="text-end font-monospace">{{ cta.saldo|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Sin pasivos registrados</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light fw-bold text-warning-emphasis">
+                            <tr>
+                                <td>TOTAL PASIVO</td>
+                                <td class="text-end font-monospace">{{ total_pasivo|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CAPITAL -->
+            <div class="card shadow-sm border-success">
+                <div class="card-header bg-success text-white fw-bold">CAPITAL CONTABLE</div>
+                <div class="card-body p-0">
+                    <table class="table table-hover mb-0">
+                        <tbody>
+                            {% for cta in capital_contribuido %}
+                            <tr>
+                                <td>{{ cta.nombre }}</td>
+                                <td class="text-end font-monospace">{{ cta.saldo|floatformat:2|intcomma }}</td>
+                            </tr>
+                            {% endfor %}
+
+                            <!-- Utilidad del Ejercicio INTEGRADA -->
+                            <tr class="table-success">
+                                <td class="fw-bold fst-italic">Resultados del Ejercicio (ER)</td>
+                                <td class="text-end font-monospace fw-bold">
+                                    {{ utilidad_ejercicio|floatformat:2|intcomma }}
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot class="table-light fw-bold text-success">
+                            <tr>
+                                <td>TOTAL CAPITAL</td>
+                                <td class="text-end font-monospace">{{ total_capital|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TOTAL PASIVO + CAPITAL -->
+            <div class="mt-3 p-2 bg-light border rounded text-end fw-bold">
+                Total Pasivo + Capital: <span class="font-monospace">${{
+                    total_capital|add:total_pasivo|floatformat:2|intcomma }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- VALIDACIÓN DE CUADRE -->
+    {% if cuadra_ok %}
+    <div class="alert alert-success d-flex align-items-center mt-3 shadow-sm" role="alert">
+        <i class="bi bi-check-circle-fill fs-4 me-2"></i>
+        <div>
+            <strong>¡Balance Cuadrado!</strong>
+            La ecuación contable se cumple correctamente (Diferencia: {{ diferencia|floatformat:2 }}).
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-danger d-flex align-items-center mt-3 shadow-sm" role="alert">
+        <i class="bi bi-exclamation-triangle-fill fs-4 me-2"></i>
+        <div>
+            <strong>¡ERROR DE CUADRE!</strong>
+            El balance no cuadra. Diferencia: ${{ diferencia|floatformat:2|intcomma }}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

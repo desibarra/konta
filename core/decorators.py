@@ -1,7 +1,7 @@
 from functools import wraps
 from django.shortcuts import redirect
 from django.contrib import messages
-from .models import UsuarioEmpresa
+from .models import UsuarioEmpresa, Empresa
 
 
 def require_active_empresa(view_func):
@@ -9,12 +9,14 @@ def require_active_empresa(view_func):
     Decorador que asegura que:
     1. Hay una empresa seleccionada en la sesión.
     2. El usuario actual tiene permiso para ver esa empresa.
+    3. Inyecta el objeto Empresa en request.empresa para uso en la vista.
     
     Uso:
         @login_required
         @require_active_empresa
         def mi_vista(request):
-            # Ya puedes usar request.session['active_empresa_id'] con seguridad
+            # Puedes usar request.empresa directamente
+            empresa = request.empresa
             pass
     """
     @wraps(view_func)
@@ -27,13 +29,15 @@ def require_active_empresa(view_func):
             return redirect('dashboard')
         
         # 2. Seguridad: ¿El usuario tiene acceso REAL a esa empresa?
-        # Esto evita que alguien inyecte un ID de empresa en su cookie
-        exists = UsuarioEmpresa.objects.filter(
-            usuario=request.user, 
-            empresa__id=active_id
-        ).exists()
-
-        if not exists:
+        try:
+            ue = UsuarioEmpresa.objects.select_related('empresa').get(
+                usuario=request.user, 
+                empresa__id=active_id
+            )
+            # 3. Inyectar empresa en request para uso en la vista
+            request.empresa = ue.empresa
+            
+        except UsuarioEmpresa.DoesNotExist:
             messages.error(request, "⛔ Acceso denegado: No tienes permiso en esta empresa.")
             # Limpiamos la sesión corrupta
             if 'active_empresa_id' in request.session:
