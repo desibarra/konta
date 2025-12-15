@@ -1,74 +1,94 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Mi Contabilidad Fiscal{% endblock %}</title>
-
-    <!-- Django Bootstrap 5 -->
+    <title>{% block title %}Konta - Sistema Contable Empresarial{% endblock %}</title>
     {% load django_bootstrap5 %}
     {% bootstrap_css %}
-
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-
     {% block extra_css %}{% endblock %}
 </head>
 
 <body class="bg-light">
-
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}">
-                <i class="bi bi-wallet2"></i> Konta
-            </a>
-
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-
+            <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}"><i class="bi bi-wallet2"></i> Konta</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent"><span
+                    class="navbar-toggler-icon"></span></button>
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
-                           href="{% url 'dashboard' %}">
-                            Dashboard
+                    <li class="nav-item"><a
+                            class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+                            href="{% url 'dashboard' %}">Dashboard</a></li>
+                    {% if user.is_authenticated and available_empresas %}
+                    <li class="nav-item dropdown ms-3">
+                        <a class="nav-link dropdown-toggle active fw-bold border border-light rounded px-3" href="#"
+                            id="empresaDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            {% if active_empresa %}<i class="bi bi-building-check"></i> {{ active_empresa.nombre }}{%
+                            else %}<i class="bi bi-building-exclamation"></i> Seleccionar Empresa{% endif %}
                         </a>
-                    </li>
-                </ul>
+                        <ul class="dropdown-menu shadow" aria-labelledby="empresaDropdown">
+                            {% for emp in available_empresas %}<li><a
+                                    class="dropdown-item {% if emp.selected %}active{% endif %}"
+                                    href="{% url 'switch_empresa' emp.id %}">{{ emp.nombre }}{% if emp.selected %}<i
+                                        class="bi bi-check float-end"></i>{% endif %}</a></li>{% endfor %}
+                            {% if not available_empresas %}<li><span class="dropdown-item text-mut
 
-                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
-                    {% if user.is_authenticated and user.is_staff %}
-                    <li class="nav-item me-3">
-                        <a href="{% url 'admin:core_empresa_changelist' %}"
-                           class="btn btn-sm btn-outline-light border-0">
-                            <i class="bi bi-building"></i> Gestionar Empresas
-                        </a>
+ed">Sin empresas asignadas</span></li>{% endif %}
+                        </ul>
                     </li>
                     {% endif %}
-
+                </ul>
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-center">
+                    {% if user.is_authenticated %}
+                    <li class="nav-item dropdown me-3">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                            data-bs-toggle="dropdown"><i class="bi bi-person-circle me-1"></i>{{ user.username }}</a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="userDropdown">
+                            <li><span class="dropdown-item-text small text-muted">{{ user_display_name }}</span></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item text-danger" href="{% url 'logout' %}"><i
+                                        class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión</a></li>
+                        </ul>
+                    </li>
+                    {% if user.is_staff %}<li class="nav-item me-3"><a href="{% url 'admin:core_empresa_changelist' %}"
+                            class="btn btn-sm btn-outline-light border-0"><i class="bi bi-building"></i> Gestionar
+                            Empresas</a></li>{% endif %}
                     <li class="nav-item">
+                        {% if active_empresa %}
                         <a class="nav-link btn btn-outline-light text-white border-white px-3"
-                           href="{% url 'upload_xml' %}">
+                            href="{% url 'upload_xml' %}">
                             <i class="bi bi-cloud-upload me-1"></i> Subir XML
                         </a>
+                        {% else %}
+                        <button class="btn btn-outline-light text-white-50 border-white px-3" disabled
+                            data-bs-toggle="tooltip" title="Selecciona una empresa activa para habilitar esta acción">
+                            <i class="bi bi-cloud-upload me-1"></i> Subir XML
+                        </button>
+                        {% endif %}
                     </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>
     </nav>
-
-    <div class="container">
-        {% bootstrap_messages %}
-        {% block content %}{% endblock %}
-    </div>
-
-    <footer class="mt-5 py-3 text-center text-muted small">
-        &copy; {% now "Y" %} Konta - Sistema de Contabilidad Personal.
-    </footer>
-
+    <div class="container">{% bootstrap_messages %}{% block content %}{% endblock %}</div>
+    <footer class="mt-5 py-3 text-center text-muted small">&copy; {% now "Y" %} Konta - Sistema de Contabilidad
+        Empresarial Inteligente.</footer>
     {% bootstrap_javascript %}
+    <script>
+        // Initialize Bootstrap tooltips
+        document.addEventListener('DOMContentLoaded', function () {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 
