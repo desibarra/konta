@@ -73,6 +73,7 @@ def upload_xml(request):
             files = request.FILES.getlist('xml_files')
             procesadas = 0
             errores = 0
+            errores_detalle = []
             
             for file in files:
                 try:
@@ -80,12 +81,23 @@ def upload_xml(request):
                     procesadas += 1
                 except Exception as e:
                     errores += 1
-                    messages.error(request, f"Error en '{file.name}': {str(e)}")
+                    # Log detallado en servidor
+                    logger.error(f"Error procesando {file.name}: {str(e)}")
+                    # Guardar para resumen (máximo 5 para no saturar UI)
+                    if len(errores_detalle) < 5:
+                        errores_detalle.append(f"{file.name}: {str(e)[:100]}")
             
+            # Mensajes consolidados profesionales
             if procesadas > 0:
-                messages.success(request, f"✅ {procesadas} facturas procesadas correctamente para {empresa.nombre}.")
+                messages.success(request, f"✅ {procesadas} factura(s) procesada(s) correctamente para {empresa.nombre}.")
+            
             if errores > 0:
-                messages.warning(request, f"⚠️ {errores} archivos no pudieron procesarse.")
+                error_msg = f"⚠️ {errores} archivo(s) no pudieron procesarse."
+                if errores_detalle:
+                    error_msg += " Primeros errores: " + "; ".join(errores_detalle)
+                if errores > 5:
+                    error_msg += f" (y {errores - 5} más - ver logs del servidor)"
+                messages.warning(request, error_msg)
                 
             return redirect('dashboard')
     else:
@@ -112,35 +124,27 @@ def detalle_factura(request, pk):
     return render(request, 'core/factura_detail.html', context)
 
 @login_required
+@require_active_empresa
 def carga_masiva_xml(request):
-    active_id = get_active_empresa_id(request)
-    # Validar contexto
-    if not active_id:
-        # Dashboard ya muestra mensaje global - no duplicar
-        return redirect('dashboard')
-
+    """Vista para carga masiva de XMLs"""
+    empresa = request.empresa
+    
     if request.method == "POST":
-        # Usar la empresa de la sesión, ignorar POST manipulado
-        empresa = get_object_or_404(Empresa, pk=active_id)
-        
         # Validar Rol de Escritura
-        try:
-            ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa=empresa)
-            if ue.rol == 'lectura':
-                 messages.error(request, "Tu rol de Lectura no permite subir archivos.")
-                 return redirect('dashboard')
-        except UsuarioEmpresa.DoesNotExist:
-             return redirect('dashboard')
+        ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa=empresa)
+        if ue.rol == 'lectura':
+            messages.error(request, "Tu rol de Lectura no permite subir archivos.")
+            return redirect('dashboard')
         
         files = request.FILES.getlist("xmls")
         if not files:
-             messages.error(request, "Debe seleccionar al menos un archivo XML.")
-             return redirect("carga_masiva_xml")
+            messages.error(request, "Debe seleccionar al menos un archivo XML.")
+            return redirect("carga_masiva_xml")
 
         procesados = 0
         duplicados = 0
         errores = 0
-        errors_list = []
+        errores_detalle = []
 
         for file in files:
             try:
@@ -152,15 +156,24 @@ def carga_masiva_xml(request):
                     duplicados += 1
             except Exception as e:
                 errores += 1
-                errors_list.append(f"{file.name}: {str(e)}")
-                logger.error(f"Error procesando {file.name}: {e}")
+                # Log detallado en servidor
+                logger.error(f"Error procesando {file.name}: {str(e)}")
+                # Guardar para resumen (máximo 5 para no saturar UI)
+                if len(errores_detalle) < 5:
+                    errores_detalle.append(f"{file.name}: {str(e)[:100]}")
         
+        # Mensajes consolidados profesionales
         if procesados > 0:
-            messages.success(request, f"✅ Se procesaron {procesados} facturas correctamente.")
+            messages.success(request, f"✅ {procesados} factura(s) procesada(s) correctamente.")
         if duplicados > 0:
-            messages.info(request, f"ℹ️ {duplicados} facturas ya existían.")
+            messages.info(request, f"ℹ️ {duplicados} factura(s) ya existían (duplicadas).")
         if errores > 0:
-            messages.warning(request, f"⚠️ {errores} archivos no se pudieron procesar.")
+            error_msg = f"⚠️ {errores} archivo(s) fallaron."
+            if errores_detalle:
+                error_msg += " Primeros errores: " + "; ".join(errores_detalle)
+            if errores > 5:
+                error_msg += f" (y {errores - 5} más - revisar logs del servidor)"
+            messages.warning(request, error_msg)
             
         return redirect("dashboard")
     
@@ -178,13 +191,85 @@ class DashboardView(ListView):
         active_id = self.request.session.get('active_empresa_id')
         if not active_id:
             return Factura.objects.none()
+        
+        # Obtener rango de fechas
+        fecha_inicio, fecha_fin = self._get_date_range()
+        
+        # Filtrar por empresa y rango de fechas
+        queryset = Factura.objects.filter(
+            empresa_id=active_id,
+            fecha__date__gte=fecha_inicio,
+            fecha__date__lte=fecha_fin
+        ).select_related('empresa').order_by('-fecha')
+        
+        return queryset
+    
+    def _get_date_range(self):
+        """
+        Obtiene el rango de fechas desde los parámetros GET.
+        Por defecto: mes actual (del 1ro al día de hoy)
+        """
+        from datetime import date, timedelta
+        from django.utils.dateparse import parse_date
+        
+        today = date.today()
+        
+        # Leer parámetros GET
+        fecha_inicio_str = self.request.GET.get('fecha_inicio')
+        fecha_fin_str = self.request.GET.get('fecha_fin')
+        
+        # Si hay parámetros, usarlos
+        if fecha_inicio_str and fecha_fin_str:
+            fecha_inicio = parse_date(fecha_inicio_str)
+            fecha_fin = parse_date(fecha_fin_str)
             
-        return Factura.objects.filter(empresa_id=active_id).select_related('empresa').order_by('-fecha')
+            # Validar que sean fechas válidas
+            if fecha_inicio and fecha_fin:
+                return fecha_inicio, fecha_fin
+        
+        # Default: Mes actual (del 1ro a hoy)
+        fecha_inicio = today.replace(day=1)
+        fecha_fin = today
+        
+        return fecha_inicio, fecha_fin
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        from datetime import date, timedelta
         
         active_id = self.request.session.get('active_empresa_id')
+        
+        # Obtener rango de fechas actual
+        fecha_inicio, fecha_fin = self._get_date_range()
+        
+        # Pasar fechas al contexto para mantener valores en inputs
+        context['fecha_inicio'] = fecha_inicio.strftime('%Y-%m-%d')
+        context['fecha_fin'] = fecha_fin.strftime('%Y-%m-%d')
+        
+        # Calcular fechas para botones rápidos
+        today = date.today()
+        
+        # Este Mes
+        context['preset_este_mes_inicio'] = today.replace(day=1).strftime('%Y-%m-%d')
+        context['preset_este_mes_fin'] = today.strftime('%Y-%m-%d')
+        
+        # Mes Anterior
+        first_day_this_month = today.replace(day=1)
+        last_day_prev_month = first_day_this_month - timedelta(days=1)
+        first_day_prev_month = last_day_prev_month.replace(day=1)
+        context['preset_mes_anterior_inicio'] = first_day_prev_month.strftime('%Y-%m-%d')
+        context['preset_mes_anterior_fin'] = last_day_prev_month.strftime('%Y-%m-%d')
+        
+        # Este Año
+        context['preset_este_anio_inicio'] = today.replace(month=1, day=1).strftime('%Y-%m-%d')
+        context['preset_este_anio_fin'] = today.strftime('%Y-%m-%d')
+        
+        # Todo (últimos 5 años para no sobrecargar)
+        context['preset_todo_inicio'] = today.replace(year=today.year - 5, month=1, day=1).strftime('%Y-%m-%d')
+        context['preset_todo_fin'] = today.strftime('%Y-%m-%d')
+        
+        # Determinar qué preset está activo
+        context['preset_activo'] = self._get_active_preset(fecha_inicio, fecha_fin)
         
         # Construir selector de empresas (solo las permitidas)
         mis_empresas_rels = UsuarioEmpresa.objects.filter(usuario=self.request.user).select_related('empresa')
@@ -203,13 +288,18 @@ class DashboardView(ListView):
         context['empresa_id_seleccionada'] = active_id
         
         if active_id:
-            # Queryset total de la empresa (sin paginacion)
-            qs_total = Factura.objects.filter(empresa_id=active_id)
+            # Queryset total de la empresa FILTRADO POR FECHAS
+            qs_total = Factura.objects.filter(
+                empresa_id=active_id,
+                fecha__date__gte=fecha_inicio,
+                fecha__date__lte=fecha_fin
+            )
             
+            # Calcular totales SOLO de facturas contabilizadas en el rango
             movs_qs = MovimientoPoliza.objects.filter(
                 poliza__factura__in=qs_total,
-                poliza__factura__estado_contable='CONTABILIZADA', # Solo lo real
-                poliza__factura__naturaleza__in=['I', 'E'] # Solo Ingresos/Egresos
+                poliza__factura__estado_contable='CONTABILIZADA',
+                poliza__factura__naturaleza__in=['I', 'E']
             )
             
             totales = movs_qs.values('poliza__factura__naturaleza').annotate(
@@ -237,29 +327,44 @@ class DashboardView(ListView):
              context['utilidad_neta'] = 0
 
         return context
-
-@login_required
-def detalle_factura(request, uuid):
-    active_id = request.session.get('active_empresa_id')
-    # Validar que la factura pertenezca a la empresa activa
-    factura = get_object_or_404(Factura, uuid=uuid, empresa_id=active_id)
     
-    # Validar acceso explicito user-empresa (redundante pero seguro)
-    if not UsuarioEmpresa.objects.filter(usuario=request.user, empresa=factura.empresa).exists():
-        messages.error(request, "No tienes permiso.")
-        return redirect('dashboard')
+    def _get_active_preset(self, fecha_inicio, fecha_fin):
+        """Determina qué preset está activo basado en las fechas"""
+        from datetime import date, timedelta
         
-    return render(request, 'core/detalle.html', {'factura': factura})
+        today = date.today()
+        
+        # Este Mes
+        if (fecha_inicio == today.replace(day=1) and fecha_fin == today):
+            return 'este_mes'
+        
+        # Mes Anterior
+        first_day_this_month = today.replace(day=1)
+        last_day_prev_month = first_day_this_month - timedelta(days=1)
+        first_day_prev_month = last_day_prev_month.replace(day=1)
+        if (fecha_inicio == first_day_prev_month and fecha_fin == last_day_prev_month):
+            return 'mes_anterior'
+        
+        # Este Año
+        if (fecha_inicio == today.replace(month=1, day=1) and fecha_fin == today):
+            return 'este_anio'
+        
+        # Todo (últimos 5 años)
+        if (fecha_inicio == today.replace(year=today.year - 5, month=1, day=1)):
+            return 'todo'
+        
+        # Personalizado
+        return 'personalizado'
+
 
 # --- Vistas Restauradas y Blindadas ---
 
 @login_required
+@require_active_empresa
 def descargar_xml(request, pk):
-    active_id = request.session.get('active_empresa_id')
-    if not active_id:
-        return redirect('dashboard')
-        
-    factura = get_object_or_404(Factura, uuid=pk, empresa_id=active_id)
+    """Vista para descargar XML de factura"""
+    empresa = request.empresa
+    factura = get_object_or_404(Factura, uuid=pk, empresa=empresa)
     
     # Construir ruta (asumiendo guardado en media/xmls/rfc/...)
     # Ajustar según tu lógica real de almacenamiento.
@@ -274,28 +379,26 @@ def descargar_xml(request, pk):
     return redirect('factura_detail', pk=pk)
 
 @login_required
+@require_active_empresa
 def ver_pdf(request, pk):
-    # Igual que XML, requiere sistema de archivos. Placeholder seguro.
+    """Vista para ver PDF de factura"""
+    # Funcionalidad pendiente de implementación
     messages.warning(request, "Visualización PDF pendiente.")
     return redirect('factura_detail', pk=pk)
 
 @login_required
+@require_active_empresa
 def eliminar_factura(request, pk):
-    active_id = request.session.get('active_empresa_id')
-    if not active_id: return redirect('dashboard')
-        
-    active_empresa = get_object_or_404(Empresa, pk=active_id)
-
+    """Vista para eliminar factura"""
+    empresa = request.empresa
+    
     # Validar Rol (Lectura NO borra)
-    try:
-        ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa=active_empresa)
-        if ue.rol == 'lectura':
-             messages.error(request, "Solo administradores o contadores pueden eliminar.")
-             return redirect('factura_detail', pk=pk)
-    except UsuarioEmpresa.DoesNotExist:
-         return redirect('dashboard')
-
-    factura = get_object_or_404(Factura, uuid=pk, empresa=active_empresa)
+    ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa=empresa)
+    if ue.rol == 'lectura':
+        messages.error(request, "Solo administradores o contadores pueden eliminar.")
+        return redirect('factura_detail', pk=pk)
+    
+    factura = get_object_or_404(Factura, uuid=pk, empresa=empresa)
     
     if request.method == 'POST':
         factura.delete()
@@ -329,22 +432,18 @@ class BandejaContabilizacionView(ListView):
         return context
 
 @login_required
+@require_active_empresa
 def contabilizar_factura(request, pk):
-    active_id = request.session.get('active_empresa_id')
-    if not active_id: return redirect('dashboard')
+    """Vista para contabilizar factura"""
+    empresa = request.empresa
     
-    active_empresa = get_object_or_404(Empresa, pk=active_id)
-
     # Validar Rol (Lectura NO contabiliza)
-    try:
-        ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa=active_empresa)
-        if ue.rol == 'lectura':
-             messages.error(request, "Rol lectura no permite contabilizar.")
-             return redirect('bandeja_contabilizacion')
-    except UsuarioEmpresa.DoesNotExist:
-         return redirect('dashboard')
-
-    factura = get_object_or_404(Factura, uuid=pk, empresa=active_empresa)
+    ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa=empresa)
+    if ue.rol == 'lectura':
+        messages.error(request, "Rol lectura no permite contabilizar.")
+        return redirect('bandeja_contabilizacion')
+    
+    factura = get_object_or_404(Factura, uuid=pk, empresa=empresa)
     
     try:
         plantilla_id = None

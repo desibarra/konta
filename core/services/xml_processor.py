@@ -54,15 +54,39 @@ def _extract_val(node, attr, key):
     except (KeyError, TypeError, AttributeError): return None
 
 def procesar_xml_cfdi(archivo_xml, archivo_nombre, empresa):
+    """
+    Procesa un archivo XML CFDI y crea/actualiza la factura en la base de datos.
+    
+    SOPORTA TODOS LOS TIPOS DE CFDI:
+    - I: Ingreso
+    - E: Egreso  
+    - P: Pago
+    - N: Nómina
+    - T: Traslado
+    
+    Args:
+        archivo_xml: Archivo XML a procesar
+        archivo_nombre: Nombre del archivo (para logging)
+        empresa: Instancia de Empresa
+    
+    Returns:
+        tuple: (factura, created) - Factura creada/actualizada y booleano de creación
+    
+    Raises:
+        ValueError: Si el XML es inválido o no contiene datos requeridos
+    """
     try:
         cfdi = CFDI.from_file(archivo_xml)
     except Exception as e:
         raise ValueError(f"XML inválido o no es CFDI legible: {str(e)}")
     
-    # 1. Validar TipoDeComprobante y Rechazar Pagos (P)
+    # 1. Validar TipoDeComprobante
     tipo_comprobante = _get_tipo_comprobante(cfdi)
-    if tipo_comprobante == 'P':
-        raise ValueError("Comprobante de Pago (P) no soportado. Solo Ingreso (I) y Egreso (E).")
+    
+    # VALIDACIÓN: Solo rechazar si NO es un tipo CFDI válido
+    tipos_validos = ['I', 'E', 'P', 'N', 'T']
+    if tipo_comprobante not in tipos_validos:
+        raise ValueError(f"Tipo de comprobante '{tipo_comprobante}' no reconocido. Tipos válidos: {', '.join(tipos_validos)}")
     
     # 2. Extraer Timbre Fiscal Digital de forma 100% segura
     timbre = None
@@ -184,9 +208,9 @@ def procesar_xml_cfdi(archivo_xml, archivo_nombre, empresa):
         defaults=factura_data
     )
     
-    if archivo_nombre:
-        archivo_xml.seek(0)
-        factura.archivo_xml.save(archivo_nombre, ContentFile(archivo_xml.read()))
+    # NOTA: Campo archivo_xml fue eliminado en migración 0003
+    # Si se necesita almacenar el XML físico, agregar campo FileField al modelo
+    # Por ahora, solo procesamos y guardamos los datos parseados
     
     if not created:
         factura.conceptos.all().delete()
@@ -250,72 +274,8 @@ def procesar_xml_cfdi(archivo_xml, archivo_nombre, empresa):
             impuestos_trasladados=c_tras_total
         )
     
-    generar_poliza_automatica(factura)
-    
     return factura, created
 
+# GENERAR_POLIZA_AUTOMATICA ELIMINADA 
+# Responsabilidad movida exclusivamente a AccountingService
 
-def generar_poliza_automatica(factura):
-    Poliza.objects.filter(factura=factura).delete()
-    
-    poliza = Poliza.objects.create(
-        factura=factura,
-        fecha=factura.fecha, # fecha ya es objeto date o string parseable por Django
-        descripcion=f"Póliza automática - {factura.get_tipo_comprobante_display()} {factura.uuid}"
-    )
-    
-    # Cuentas básicas para esta empresa
-    # Cuentas básicas para esta empresa
-    # USAR SOLO CUENTAS VALIDAS SEGUN REGLA DE ORO
-    cuentas = {
-        'bancos': '102',        # Preferido para entradas
-        'clientes': '105',      # Alternativa Ingresos
-        'iva_pendiente': '118', # IVA Acreditable (Compras)
-        'proveedores': '201',   # Pasivo (Compras)
-        'iva_trasladado': '208',# IVA Trasladado (Ventas)
-        'ingresos': '401',      # Ventas
-        'gastos': '601',        # Gastos Generales (usar 601 mejor que 600)
-    }
-    
-    # helper para buscar cuenta o fallback
-    def get_cta(cod):
-        try:
-            return CuentaContable.objects.get(empresa=factura.empresa, codigo=cod)
-        except CuentaContable.DoesNotExist:
-             # Fallback a búsqueda laxa o creación podría ir aquí, pero respetamos lógica actual de error
-             # Intentamos buscar por prefijo si es gasto? No, strict.
-             raise Exception(f"Cuenta contable {cod} faltante para la empresa {factura.empresa.nombre}.")
-
-    # CONTABILIZACIÓN BASADA EN NATURALEZA (I=Ingreso Real, E=Gasto Real)
-    if factura.naturaleza == "I":
-        # Póliza de Ingreso
-        # Debe: Bancos/Clientes (Total)
-        # Haber: Ventas (Subtotal)
-        # Haber: IVA Trasladado (Impuestos)
-        
-        cta_cargo = get_cta(cuentas['bancos']) 
-        cta_abono_ingreso = get_cta(cuentas['ingresos'])
-        cta_abono_iva = get_cta(cuentas['iva_trasladado'])
-        
-        MovimientoPoliza.objects.create(poliza=poliza, cuenta=cta_cargo, debe=factura.total, descripcion=f"Cobro {factura.uuid[:8]}")
-        MovimientoPoliza.objects.create(poliza=poliza, cuenta=cta_abono_ingreso, haber=factura.subtotal, descripcion="Ingreso Ventas")
-        
-        if factura.total_impuestos_trasladados > 0:
-            MovimientoPoliza.objects.create(poliza=poliza, cuenta=cta_abono_iva, haber=factura.total_impuestos_trasladados, descripcion="IVA Trasladado")
-    
-    elif factura.naturaleza == "E":
-        # Póliza de Egreso (Gasto)
-        # Debe: Gastos (Subtotal)
-        # Debe: IVA Acreditable (Impuestos)
-        # Haber: Proveedores/Bancos (Total)
-        
-        cta_cargo_gasto = get_cta(cuentas['gastos'])
-        cta_cargo_iva = get_cta(cuentas['iva_pendiente'])
-        cta_abono = get_cta(cuentas['proveedores'])
-        
-        MovimientoPoliza.objects.create(poliza=poliza, cuenta=cta_cargo_gasto, debe=factura.subtotal, descripcion=f"Gasto {factura.uuid[:8]}")
-        
-        if factura.total_impuestos_trasladados > 0:
-            MovimientoPoliza.objects.create(poliza=poliza, cuenta=cta_cargo_iva, debe=factura.total_impuestos_trasladados, descripcion="IVA Acreditable")
-            
-        MovimientoPoliza.objects.create(poliza=poliza, cuenta=cta_abono, haber=factura.total, descripcion="Provision Proveedor")
