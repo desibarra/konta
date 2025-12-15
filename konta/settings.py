@@ -64,6 +64,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.multi_empresa_context', # Contexto Multi-Empresa
+                'core.context_processors.user_display', # User Display Name
             ],
         },
     },
@@ -153,3 +155,14 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+# Configuración de Autenticación
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'
+
+# Configuración de Sesión - FORZAR PERSISTENCIA
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Base de datos
+SESSION_SAVE_EVERY_REQUEST = True  # Guardar en cada request
+SESSION_COOKIE_AGE = 86400  # 24 horas
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'

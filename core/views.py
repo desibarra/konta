@@ -152,21 +152,8 @@ class DashboardView(ListView):
     context_object_name = 'facturas'
     paginate_by = 20
     
-    def dispatch(self, request, *args, **kwargs):
-        # AUTO-SELECT: Ejecutar ANTES de cualquier otra cosa
-        active_id = request.session.get('active_empresa_id')
-        if not active_id:
-            # Intentar auto-seleccionar la primera empresa del usuario
-            first_empresa_rel = UsuarioEmpresa.objects.filter(usuario=request.user).select_related('empresa').first()
-            if first_empresa_rel:
-                request.session['active_empresa_id'] = first_empresa_rel.empresa.id
-                request.session['active_empresa_nombre'] = first_empresa_rel.empresa.nombre
-                request.session.modified = True
-        
-        return super().dispatch(request, *args, **kwargs)
-    
     def get_queryset(self):
-        # Filtro Global por Sesión (empresa ya seleccionada en dispatch)
+        # Filtro Global por Sesión - NO auto-select
         active_id = self.request.session.get('active_empresa_id')
         if not active_id:
             return Factura.objects.none()
