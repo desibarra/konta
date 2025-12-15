@@ -6,19 +6,14 @@ from django.contrib import messages
 from core.models import Empresa
 from core.services.reportes_engine import ReportesEngine
 from core.services.contabilidad_engine import ContabilidadEngine
+from .decorators import require_active_empresa
 
 @login_required
+@require_active_empresa
 def reporte_balanza(request):
-    # Obtener empresa de la sesión
-    active_id = request.session.get('active_empresa_id')
-    if not active_id:
-        # Dashboard ya muestra mensaje global
-        return redirect('dashboard')
-
-    try:
-        empresa = Empresa.objects.get(pk=active_id)
-    except Empresa.DoesNotExist:
-        return redirect('dashboard')
+    """Vista para generar la Balanza de Comprobación"""
+    # El decorador require_active_empresa ya asegura que 'empresa' esté en request.
+    empresa = request.empresa
 
     # Manejo de fechas default (mes actual)
     today = date.today()

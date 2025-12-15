@@ -9,6 +9,7 @@ from .forms import UploadXMLForm
 from .services.xml_processor import procesar_xml_cfdi
 from .services.accounting_service import AccountingService
 from .models import Factura, Empresa, CuentaContable, UsuarioEmpresa, MovimientoPoliza, Poliza, PlantillaPoliza
+from .decorators import require_active_empresa
 import logging
 import os
 
@@ -50,17 +51,6 @@ def switch_empresa(request, empresa_id):
     return redirect(next_url)
 
 @login_required
-def upload_xml(request):
-    # Obtener empresa activa de sesión
-    active_empresa_id = request.session.get('active_empresa_id')
-    if not active_empresa_id:
-        # Dashboard ya muestra mensaje global - no duplicar
-        return redirect('dashboard')
-    
-    try:
-        empresa = Empresa.objects.get(id=active_empresa_id)
-    except Empresa.DoesNotExist:
-        messages.error(request, "Empresa no encontrada.")
         return redirect('dashboard')
     
     # Validar Permiso y Rol
