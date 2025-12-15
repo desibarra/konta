@@ -22,19 +22,31 @@ def get_active_empresa_id(request):
 @login_required
 def switch_empresa(request, empresa_id):
     """Cambia la empresa activa en la sesión, validando permisos"""
+    print(f"\n🔥 SWITCH_EMPRESA EJECUTADO")
+    print(f"   User: {request.user.username}")
+    print(f"   Empresa ID: {empresa_id}")
+    print(f"   Session antes: {dict(request.session)}")
+    
     try:
         # Validar que el usuario tenga acceso a esta empresa
         ue = UsuarioEmpresa.objects.get(usuario=request.user, empresa__id=empresa_id)
         # Guardar en sesión
         request.session['active_empresa_id'] = ue.empresa.id
         request.session['active_empresa_nombre'] = ue.empresa.nombre
-        request.session.modified = True  # Forzar guardado de sesión
+        request.session.modified = True
+        
+        print(f"   ✅ SESIÓN GUARDADA:")
+        print(f"      active_empresa_id: {ue.empresa.id}")
+        print(f"      active_empresa_nombre: {ue.empresa.nombre}")
+        print(f"   Session después: {dict(request.session)}")
+        
         messages.success(request, f"Empresa cambiada a: {ue.empresa.nombre}")
     except UsuarioEmpresa.DoesNotExist:
+        print(f"   ❌ ERROR: Usuario no tiene acceso a empresa {empresa_id}")
         messages.error(request, "Acceso denegado a esta empresa.")
     
-    # Redirigir a la misma página o al dashboard
     next_url = request.META.get('HTTP_REFERER', 'dashboard')
+    print(f"   🔄 Redirigiendo a: {next_url}\n")
     return redirect(next_url)
 
 @login_required
@@ -153,7 +165,7 @@ class DashboardView(ListView):
     paginate_by = 20
     
     def get_queryset(self):
-        # Filtro Global por Sesión - NO auto-select
+        # NO auto-select - usuario DEBE seleccionar manualmente
         active_id = self.request.session.get('active_empresa_id')
         if not active_id:
             return Factura.objects.none()
