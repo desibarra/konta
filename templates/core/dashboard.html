@@ -4,12 +4,38 @@
 {% block title %}Dashboard - Konta{% endblock %}
 
 {% block content %}
+{% if not active_empresa %}
+<div class="alert alert-warning d-flex align-items-center shadow-sm" role="alert">
+    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+    <div>
+        <strong>Selecciona una empresa activa para comenzar</strong>
+        <p class="mb-0 small">Usa el selector de empresas en la barra superior.</p>
+    </div>
+</div>
+{% else %}
 <div class="row align-items-center mb-4">
     <div class="col">
         <h1 class="h2 mb-0">Dashboard Financiero</h1>
-        <p class="text-muted">Resumen de tu actividad fiscal</p>
+        <p class="text-muted mb-0">Resumen de tu actividad fiscal</p>
+        <div class="mt-2">
+            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2">
+                <i class="bi bi-building-check me-2"></i>
+                <strong>Empresa activa:</strong> {{ active_empresa.nombre }}
+            </span>
+        </div>
     </div>
     <div class="col-md-auto">
+        <div class="btn-group me-2" role="group">
+            <a href="{% url 'reporte_balanza' %}" class="btn btn-outline-secondary">
+                📊 Balanza de Comprobación
+            </a>
+            <a href="{% url 'reporte_estado_resultados' %}" class="btn btn-outline-secondary">
+                📈 Estado de Resultados
+            </a>
+            <a href="{% url 'reporte_balance_general' %}" class="btn btn-outline-secondary">
+                ⚖️ Balance General
+            </a>
+        </div>
         <a href="{% url 'bandeja_contabilizacion' %}" class="btn btn-outline-primary shadow-sm me-2">
             <i class="bi bi-inbox-fill me-2"></i>Bandeja Contable
         </a>
@@ -22,92 +48,131 @@
     </div>
 </div>
 
-<div class="card mb-4 border-0 shadow-sm bg-light">
-    <div class="card-body py-3">
-        <form method="get" class="row align-items-center g-3">
-            <div class="col-auto">
-                <label class="col-form-label fw-bold">
-                    <i class="bi bi-funnel"></i> Filtrar por empresa:
+<!-- BARRA DE FILTROS DE FECHA -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row align-items-end">
+            <!-- Botones Rápidos -->
+            <div class="col-lg-7 mb-3 mb-lg-0">
+                <label class="form-label fw-bold text-muted small mb-2">
+                    <i class="bi bi-calendar-range me-1"></i>PERIODO
                 </label>
+                <div class="btn-group w-100" role="group" aria-label="Filtros rápidos">
+                    <a href="?fecha_inicio={{ preset_este_mes_inicio }}&fecha_fin={{ preset_este_mes_fin }}"
+                        class="btn {% if preset_activo == 'este_mes' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-calendar-month me-1"></i>Este Mes
+                    </a>
+                    <a href="?fecha_inicio={{ preset_mes_anterior_inicio }}&fecha_fin={{ preset_mes_anterior_fin }}"
+                        class="btn {% if preset_activo == 'mes_anterior' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-calendar-minus me-1"></i>Mes Anterior
+                    </a>
+                    <a href="?fecha_inicio={{ preset_este_anio_inicio }}&fecha_fin={{ preset_este_anio_fin }}"
+                        class="btn {% if preset_activo == 'este_anio' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-calendar-year me-1"></i>Este Año
+                    </a>
+                    <a href="?fecha_inicio={{ preset_todo_inicio }}&fecha_fin={{ preset_todo_fin }}"
+                        class="btn {% if preset_activo == 'todo' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                        <i class="bi bi-infinity me-1"></i>Todo
+                    </a>
+                </div>
             </div>
 
-            <div class="col-auto flex-grow-1">
-                <select name="empresa" class="form-select" onchange="this.form.submit()">
-                    <option value="">Todas las empresas</option>
-
-                    {% for emp in empresas_select %}
-                    <option value="{{ emp.id }}" {% if emp.selected %}selected{% endif %}>
-                        {{ emp.nombre }} ({{ emp.rfc }})
-                    </option>
-                    {% endfor %}
-                </select>
+            <!-- Selector Personalizado -->
+            <div class="col-lg-5">
+                <form method="GET" class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label fw-bold text-muted small mb-2">
+                            <i class="bi bi-sliders me-1"></i>PERSONALIZADO
+                        </label>
+                    </div>
+                    <div class="col-5">
+                        <input type="date" name="fecha_inicio" class="form-control form-control-sm"
+                            value="{{ fecha_inicio }}" required>
+                        <small class="text-muted">Desde</small>
+                    </div>
+                    <div class="col-5">
+                        <input type="date" name="fecha_fin" class="form-control form-control-sm" value="{{ fecha_fin }}"
+                            required>
+                        <small class="text-muted">Hasta</small>
+                    </div>
+                    <div class="col-2">
+                        <button type="submit" class="btn btn-sm btn-success w-100" title="Aplicar filtro">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </form>
             </div>
+        </div>
 
-            {% if empresa_id_seleccionada %}
-            <div class="col-auto">
-                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
-                    Limpiar
-                </a>
+        <!-- Indicador de Periodo Activo -->
+        <div class="mt-3 pt-3 border-top">
+            <div class="d-flex align-items-center text-muted small">
+                <i class="bi bi-info-circle me-2"></i>
+                <span>
+                    Mostrando datos del <strong>{{ fecha_inicio }}</strong> al <strong>{{ fecha_fin }}</strong>
+                    {% if preset_activo == 'personalizado' %}
+                    <span class="badge bg-info bg-opacity-10 text-info ms-2">Periodo Personalizado</span>
+                    {% endif %}
+                </span>
             </div>
-            {% endif %}
-        </form>
+        </div>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-md-4 mb-3">
-        <div class="card text-white bg-success shadow h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title text-opacity-75 text-white">
-                            Ingresos Totales
-                        </h6>
-                        <h2 class="fw-bold mb-0">
-                            ${{ total_ingresos|floatformat:2|intcomma }}
-                        </h2>
-                    </div>
-                    <i class="bi bi-graph-up-arrow fs-1 text-white text-opacity-50"></i>
+<!-- Tarjetas de Resumen Financiero -->
+<div class="col-md-4 mb-3">
+    <div class="card text-white bg-success shadow h-100">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="card-title text-opacity-75 text-white">
+                        Ingresos Totales
+                    </h6>
+                    <h2 class="fw-bold mb-0">
+                        ${{ total_ingresos|floatformat:2|intcomma }}
+                    </h2>
                 </div>
+                <i class="bi bi-graph-up-arrow fs-1 text-white text-opacity-50"></i>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="col-md-4 mb-3">
-        <div class="card text-white bg-danger shadow h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title text-opacity-75 text-white">
-                            Egresos Totales
-                        </h6>
-                        <h2 class="fw-bold mb-0">
-                            ${{ total_egresos|floatformat:2|intcomma }}
-                        </h2>
-                    </div>
-                    <i class="bi bi-graph-down-arrow fs-1 text-white text-opacity-50"></i>
+<div class="col-md-4 mb-3">
+    <div class="card text-white bg-danger shadow h-100">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="card-title text-opacity-75 text-white">
+                        Egresos Totales
+                    </h6>
+                    <h2 class="fw-bold mb-0">
+                        ${{ total_egresos|floatformat:2|intcomma }}
+                    </h2>
                 </div>
+                <i class="bi bi-graph-down-arrow fs-1 text-white text-opacity-50"></i>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="col-md-4 mb-3">
-        <div class="card bg-white shadow h-100 border-0">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title text-muted">
-                            Facturas Procesadas
-                        </h6>
-                        <h2 class="fw-bold mb-0 text-primary">
-                            {{ total_facturas }}
-                        </h2>
-                    </div>
-                    <i class="bi bi-files fs-1 text-muted text-opacity-25"></i>
+<div class="col-md-4 mb-3">
+    <div class="card bg-white shadow h-100 border-0">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="card-title text-muted">
+                        Facturas Procesadas
+                    </h6>
+                    <h2 class="fw-bold mb-0 text-primary">
+                        {{ total_facturas }}
+                    </h2>
                 </div>
+                <i class="bi bi-files fs-1 text-muted text-opacity-25"></i>
             </div>
         </div>
     </div>
+</div>
 </div>
 
 <div class="card shadow border-0">
@@ -216,5 +281,72 @@
             </table>
         </div>
     </div>
+
+
+    <!-- CONTROLES DE PAGINACIÓN -->
+    {% if is_paginated %}
+    <div class="card-footer bg-light">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <p class="text-muted small mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Mostrando {{ page_obj.start_index }} - {{ page_obj.end_index }} de {{ page_obj.paginator.count }}
+                    facturas
+                </p>
+            </div>
+            <div class="col-md-6">
+                <nav aria-label="Paginación de facturas">
+                    <ul class="pagination pagination-sm justify-content-end mb-0">
+                        <!-- Botón Anterior -->
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link"
+                                href="?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&page={{ page_obj.previous_page_number }}"
+                                aria-label="Anterior">
+                                <i class="bi bi-chevron-left"></i> Anterior
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="bi bi-chevron-left"></i> Anterior</span>
+                        </li>
+                        {% endif %}
+
+                        <!-- Números de Página -->
+                        {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active" aria-current="page">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %} <li
+                            class="page-item">
+                            <a class="page-link"
+                                href="?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&page={{ num }}">{{ num
+                                }}</a>
+                            </li>
+                            {% endif %}
+                            {% endfor %}
+
+                            <!-- Botón Siguiente -->
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link"
+                                    href="?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&page={{ page_obj.next_page_number }}"
+                                    aria-label="Siguiente">
+                                    Siguiente <i class="bi bi-chevron-right"></i>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">Siguiente <i class="bi bi-chevron-right"></i></span>
+                            </li>
+                            {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
+{% endif %}
 {% endblock %}
