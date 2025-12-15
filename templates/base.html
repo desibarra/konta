@@ -63,10 +63,17 @@
                             class="btn btn-sm btn-outline-light border-0"><i class="bi bi-building"></i> Gestionar
                             Empresas</a></li>{% endif %}
                     <li class="nav-item">
+                        {% if active_empresa %}
                         <a class="nav-link btn btn-outline-light text-white border-white px-3"
                             href="{% url 'upload_xml' %}">
                             <i class="bi bi-cloud-upload me-1"></i> Subir XML
                         </a>
+                        {% else %}
+                        <button class="btn btn-outline-secondary px-3" disabled data-bs-toggle="tooltip"
+                            title="Selecciona una empresa para continuar">
+                            <i class="bi bi-cloud-upload me-1"></i> Subir XML
+                        </button>
+                        {% endif %}
                     </li>
                     {% endif %}
                 </ul>
