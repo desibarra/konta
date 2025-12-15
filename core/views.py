@@ -28,6 +28,7 @@ def switch_empresa(request, empresa_id):
         # Guardar en sesión
         request.session['active_empresa_id'] = ue.empresa.id
         request.session['active_empresa_nombre'] = ue.empresa.nombre
+        request.session.modified = True  # Forzar guardado de sesión
         messages.success(request, f"Empresa cambiada a: {ue.empresa.nombre}")
     except UsuarioEmpresa.DoesNotExist:
         messages.error(request, "Acceso denegado a esta empresa.")
