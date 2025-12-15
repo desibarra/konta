@@ -87,10 +87,42 @@ class CuentaContable(models.Model):
     naturaleza = models.CharField(max_length=1, choices=NATURALEZA_CHOICES, default='D')
     
     es_deudora = models.BooleanField(default=True)  # Legacy
+    
+    # CAMPOS SAT ANEXO 24 (Subcuentas Automáticas)
+    agrupador_sat = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Código agrupador SAT Anexo 24 (ej: 101.01). DEBE heredarse a subcuentas."
+    )
+    nivel = models.IntegerField(
+        default=1,
+        choices=[(1, 'Mayor'), (2, 'Subcuenta'), (3, 'Auxiliar')],
+        help_text="Nivel jerárquico: 1=Mayor, 2=Subcuenta, 3=Auxiliar"
+    )
+    padre = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='subcuentas',
+        help_text="Cuenta padre (solo para subcuentas nivel 2 y auxiliares nivel 3)"
+    )
+    rfc_tercero = models.CharField(
+        max_length=13,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="RFC del cliente/proveedor (para subcuentas específicas por tercero)"
+    )
 
     class Meta:
         unique_together = ('empresa', 'codigo')
         verbose_name_plural = "Cuentas Contables"
+        indexes = [
+            models.Index(fields=['empresa', 'rfc_tercero']),
+            models.Index(fields=['empresa', 'padre']),
+        ]
 
     def __str__(self):
         return f"{self.codigo} - {self.nombre} ({self.empresa.rfc})"

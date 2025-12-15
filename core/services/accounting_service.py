@@ -1,6 +1,10 @@
 from django.db import transaction, models
 from core.models import Factura, Poliza, MovimientoPoliza, Empresa, PlantillaPoliza
+from core.services.account_resolver import AccountResolver
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AccountingService:
     @staticmethod
@@ -82,11 +86,28 @@ class AccountingService:
             
             # --- INGRESO (I) - Factura Emitida ---
             if factura.tipo_comprobante == 'I': 
+                # CAMBIO CRÍTICO: Usar AccountResolver para subcuenta específica del cliente
+                try:
+                    cuenta_cliente = AccountResolver.resolver_cuenta_cliente(
+                        empresa=factura.empresa,
+                        factura=factura
+                    )
+                    logger.info(
+                        f"✅ Cuenta cliente resuelta: {cuenta_cliente.codigo} "
+                        f"para {factura.receptor_nombre[:30]}"
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Error resolviendo cuenta cliente: {e}")
+                    # Fallback a cuenta de plantilla si falla AccountResolver
+                    cuenta_cliente = plantilla.cuenta_flujo
+                
                 # Cargo a Flujo (Clientes) -> Total
                 movs.append(MovimientoPoliza(
-                    poliza=poliza, cuenta=plantilla.cuenta_flujo, 
-                    debe=factura.total, haber=0, 
-                    descripcion=f"Cliente: {factura.receptor_nombre[:40]}"
+                    poliza=poliza, 
+                    cuenta=cuenta_cliente,  # ← SUBCUENTA ESPECÍFICA POR RFC
+                    debe=factura.total, 
+                    haber=0, 
+                    descripcion=f"Cliente: {factura.receptor_nombre[:40]} (RFC: {factura.receptor_rfc})"
                 ))
                 # Abono a Provisión (Ventas) -> Subtotal
                 movs.append(MovimientoPoliza(
@@ -123,10 +144,28 @@ class AccountingService:
                     else:
                          raise ValueError("La factura tiene impuestos pero la plantilla no tiene cuenta de impuestos configurada.")
                 
+                # CAMBIO CRÍTICO: Usar AccountResolver para subcuenta específica del proveedor
+                try:
+                    cuenta_proveedor = AccountResolver.resolver_cuenta_proveedor(
+                        empresa=factura.empresa,
+                        factura=factura
+                    )
+                    logger.info(
+                        f"✅ Cuenta proveedor resuelta: {cuenta_proveedor.codigo} "
+                        f"para {factura.emisor_nombre[:30]}"
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Error resolviendo cuenta proveedor: {e}")
+                    # Fallback a cuenta de plantilla si falla AccountResolver
+                    cuenta_proveedor = plantilla.cuenta_flujo
+                
                 # Abono a Flujo (Proveedores/Banco) -> Total
                 movs.append(MovimientoPoliza(
-                    poliza=poliza, cuenta=plantilla.cuenta_flujo, 
-                    debe=0, haber=factura.total, descripcion="Provision Proveedor / Pago"
+                    poliza=poliza, 
+                    cuenta=cuenta_proveedor,  # ← SUBCUENTA ESPECÍFICA POR RFC
+                    debe=0, 
+                    haber=factura.total, 
+                    descripcion=f"Proveedor: {factura.emisor_nombre[:40]} (RFC: {factura.emisor_rfc})"
                 ))
 
             # 5. Validar Cuadre y Ajuste de Centavos
