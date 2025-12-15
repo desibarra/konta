@@ -97,6 +97,21 @@ def upload_xml(request):
     })
 
 @login_required
+@require_active_empresa
+def detalle_factura(request, pk):
+    """Vista para ver el detalle de una factura"""
+    empresa = request.empresa
+    
+    # Obtener la factura y verificar que pertenece a la empresa activa
+    factura = get_object_or_404(Factura, uuid=pk, empresa=empresa)
+    
+    context = {
+        'factura': factura,
+    }
+    
+    return render(request, 'core/factura_detail.html', context)
+
+@login_required
 def carga_masiva_xml(request):
     active_id = get_active_empresa_id(request)
     # Validar contexto
