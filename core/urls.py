@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from . import views
 from .views_bulk import contabilizar_lote
 from .views_reportes import (
-    reporte_balanza_comprobacion,
+    reporte_balanza,
     reporte_estado_resultados,
     reporte_balance_general
 )
@@ -29,7 +29,7 @@ urlpatterns = [
     path('contabilizar-lote/', contabilizar_lote, name='contabilizar_lote'),  # Bulk contabilization
     
     # Reportes
-    path('reportes/balanza/', reporte_balanza_comprobacion, name='reporte_balanza'),
+    path('reportes/balanza/', reporte_balanza, name='reporte_balanza'),
     path('reportes/estado-resultados/', reporte_estado_resultados, name='reporte_estado_resultados'),
     path('reportes/balance-general/', reporte_balance_general, name='reporte_balance_general'),
 ]
