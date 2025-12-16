@@ -48,11 +48,12 @@ class AccountingService:
             except PlantillaPoliza.DoesNotExist:
                 raise ValueError("La plantilla seleccionada no existe o no pertenece a esta empresa.")
         else:
-            # AUTO-SELECCIÓN: Buscar por tipo_comprobante
-            # Primero buscar default
+            # AUTO-SELECCIÓN: Buscar por NATURALEZA (I/E) en lugar de tipo_comprobante
+            # CRÍTICO: Las facturas de egreso pueden tener tipo_comprobante='I' en el XML
+            # pero naturaleza='E' basándose en el RFC. Usamos naturaleza para la plantilla.
             plantilla = PlantillaPoliza.objects.filter(
                 empresa=factura.empresa, 
-                tipo_factura=factura.tipo_comprobante,  # I, E, P, N, T
+                tipo_factura=factura.naturaleza,  # ← CAMBIO CRÍTICO: usar naturaleza (I/E)
                 es_default=True
             ).first()
             
@@ -60,7 +61,7 @@ class AccountingService:
                 # Fallback: Buscar CUALQUIERA del mismo tipo
                 plantilla = PlantillaPoliza.objects.filter(
                     empresa=factura.empresa, 
-                    tipo_factura=factura.tipo_comprobante
+                    tipo_factura=factura.naturaleza  # ← CAMBIO CRÍTICO: usar naturaleza (I/E)
                 ).first()
 
         if not plantilla:
