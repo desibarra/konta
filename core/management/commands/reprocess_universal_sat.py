@@ -40,7 +40,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '--empresa-rfc',
-            type=str',
+            type=str,
             help='RFC de empresa específica (opcional)',
         )
 
@@ -63,11 +63,13 @@ class Command(BaseCommand):
         total_procesadas = 0
         total_errores = 0
         estadisticas = {
-            'costos': 0,      # G01, G02
-            'gastos': 0,      # G03, D01-D10
-            'inversiones': 0, # I01-I08
-            'nomina': 0,      # CN01
-            'otros': 0        # P01, S01, sin UsoCFDI
+            'ventas': 0,          # Ingresos tipo I
+            'notas_credito': 0,   # Ingresos tipo E (emitidas)
+            'costos': 0,          # Egresos G01, G02
+            'gastos': 0,          # Egresos G03, D01-D10
+            'inversiones': 0,     # Egresos I01-I08
+            'nomina': 0,          # Egresos CN01
+            'otros': 0            # Egresos P01, S01
         }
         
         for empresa in empresas:
@@ -89,11 +91,13 @@ class Command(BaseCommand):
         self.stdout.write(f'❌ Errores: {total_errores}')
         
         self.stdout.write('\n📊 CLASIFICACIÓN POR CATEGORÍA SAT:')
-        self.stdout.write(f'   💰 Costos (G01-G02):        {estadisticas["costos"]:4} facturas')
-        self.stdout.write(f'   📝 Gastos (G03, D01-D10):   {estadisticas["gastos"]:4} facturas')
-        self.stdout.write(f'   🏢 Inversiones (I01-I08):   {estadisticas["inversiones"]:4} facturas')
-        self.stdout.write(f'   👥 Nómina (CN01):           {estadisticas["nomina"]:4} facturas')
-        self.stdout.write(f'   ❓ Otros (P01, S01):        {estadisticas["otros"]:4} facturas')
+        self.stdout.write(f'   💵 Ventas (I):                {estadisticas["ventas"]:4} facturas')
+        self.stdout.write(f'   🔄 Notas de Crédito (E emit): {estadisticas["notas_credito"]:4} facturas')
+        self.stdout.write(f'   💰 Costos (G01-G02):          {estadisticas["costos"]:4} facturas')
+        self.stdout.write(f'   📝 Gastos (G03, D01-D10):     {estadisticas["gastos"]:4} facturas')
+        self.stdout.write(f'   🏢 Inversiones (I01-I08):     {estadisticas["inversiones"]:4} facturas')
+        self.stdout.write(f'   👥 Nómina (CN01):             {estadisticas["nomina"]:4} facturas')
+        self.stdout.write(f'   ❓ Otros (P01, S01):          {estadisticas["otros"]:4} facturas')
         
         if dry_run:
             self.stdout.write(self.style.WARNING('\n⚠️  DRY-RUN: No se guardaron cambios'))
@@ -105,6 +109,8 @@ class Command(BaseCommand):
         procesadas = 0
         errores = 0
         estadisticas = {
+            'ventas': 0,
+            'notas_credito': 0,
             'costos': 0,
             'gastos': 0,
             'inversiones': 0,
@@ -112,32 +118,33 @@ class Command(BaseCommand):
             'otros': 0
         }
         
-        # Obtener facturas de Egreso
-        facturas_egreso = Factura.objects.filter(
+        # Obtener TODAS las facturas (Ingresos y Egresos)
+        facturas = Factura.objects.filter(
             empresa=empresa,
-            naturaleza='E'
+            naturaleza__in=['I', 'E']  # Ingresos y Egresos
         )
         
-        total = facturas_egreso.count()
-        self.stdout.write(f'   📋 Facturas de Egreso: {total}')
+        total = facturas.count()
+        self.stdout.write(f'   📋 Total facturas: {total}')
         
         if total == 0:
             return 0, 0, estadisticas
         
-        # PASO 1: Limpiar pólizas antiguas
+        # PASO 1: Limpiar TODAS las pólizas
         if not dry_run:
             polizas_eliminadas = Poliza.objects.filter(
-                factura__in=facturas_egreso
+                factura__empresa=empresa,
+                factura__naturaleza__in=['I', 'E']
             ).delete()[0]
             
-            facturas_egreso.update(estado_contable='PENDIENTE')
+            facturas.update(estado_contable='PENDIENTE')
             
             self.stdout.write(f'   🧹 Pólizas eliminadas: {polizas_eliminadas}')
         
         # PASO 2: Re-contabilizar con clasificación SAT
-        self.stdout.write(f'\n   ♻️  Re-contabilizando con UsoCFDI...')
+        self.stdout.write(f'\n   ♻️  Re-contabilizando con motor universal...')
         
-        for idx, factura in enumerate(facturas_egreso, 1):
+        for idx, factura in enumerate(facturas, 1):
             try:
                 # Progreso
                 if idx % 10 == 0 or idx == total:
@@ -146,21 +153,30 @@ class Command(BaseCommand):
                         ending='\r'
                     )
                 
-                # Clasificar por UsoCFDI
-                uso_cfdi = factura.uso_cfdi or 'G03'
-                config = get_account_config(uso_cfdi)
-                
-                # Categorizar
-                if uso_cfdi.startswith('G0') and uso_cfdi in ['G01', 'G02']:
-                    estadisticas['costos'] += 1
-                elif uso_cfdi.startswith('G') or uso_cfdi.startswith('D'):
-                    estadisticas['gastos'] += 1
-                elif uso_cfdi.startswith('I'):
-                    estadisticas['inversiones'] += 1
-                elif uso_cfdi.startswith('CN'):
-                    estadisticas['nomina'] += 1
+                # Clasificar
+                if factura.naturaleza == 'I':
+                    # Ingreso: Venta o Nota de Crédito
+                    es_nota_credito = (
+                        factura.tipo_comprobante == 'E' and
+                        factura.emisor_rfc == factura.empresa.rfc
+                    )
+                    if es_nota_credito:
+                        estadisticas['notas_credito'] += 1
+                    else:
+                        estadisticas['ventas'] += 1
                 else:
-                    estadisticas['otros'] += 1
+                    # Egreso: Clasificar por UsoCFDI
+                    uso_cfdi = factura.uso_cfdi or 'G03'
+                    if uso_cfdi.startswith('G0') and uso_cfdi in ['G01', 'G02']:
+                        estadisticas['costos'] += 1
+                    elif uso_cfdi.startswith('G') or uso_cfdi.startswith('D'):
+                        estadisticas['gastos'] += 1
+                    elif uso_cfdi.startswith('I'):
+                        estadisticas['inversiones'] += 1
+                    elif uso_cfdi.startswith('CN'):
+                        estadisticas['nomina'] += 1
+                    else:
+                        estadisticas['otros'] += 1
                 
                 if not dry_run:
                     poliza = AccountingService.contabilizar_factura(

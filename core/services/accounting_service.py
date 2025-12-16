@@ -131,9 +131,50 @@ class AccountingService:
             # porque facturas de egreso pueden tener tipo_comprobante='I' en el XML
             movs = []
             
-            # --- INGRESO (I) - Factura Emitida ---
+            # --- INGRESO (I) - Factura Emitida / Nota de Crédito ---
             if factura.naturaleza == 'I':  # ← CAMBIO CRÍTICO: usar naturaleza
-                # CAMBIO CRÍTICO: Usar AccountResolver para subcuenta específica del cliente
+                # DETECCIÓN: ¿Es Nota de Crédito emitida?
+                # Si tipo_comprobante='E' y somos el emisor, es Nota de Crédito
+                es_nota_credito = (
+                    factura.tipo_comprobante == 'E' and 
+                    factura.emisor_rfc == factura.empresa.rfc
+                )
+                
+                # Resolver cuenta de INGRESO (Ventas o Devoluciones)
+                if es_nota_credito:
+                    # Nota de Crédito: 402-01 Devoluciones sobre ventas
+                    cuenta_ingreso, created = CuentaContable.objects.get_or_create(
+                        empresa=factura.empresa,
+                        codigo='402-01',
+                        defaults={
+                            'nombre': 'Devoluciones, Descuentos o Rebajas sobre Ventas',
+                            'tipo': 'INGRESO',
+                            'naturaleza': 'A',  # Acreedora pero resta
+                            'es_deudora': True,  # Se carga (resta de ingresos)
+                            'agrupador_sat': '402.01',
+                            'nivel': 1
+                        }
+                    )
+                    if created:
+                        logger.info(f"✅ Cuenta 402-01 Devoluciones creada para {factura.empresa.nombre}")
+                else:
+                    # Venta normal: 401-01 Ventas y/o Servicios
+                    cuenta_ingreso, created = CuentaContable.objects.get_or_create(
+                        empresa=factura.empresa,
+                        codigo='401-01',
+                        defaults={
+                            'nombre': 'Ventas y/o Servicios',
+                            'tipo': 'INGRESO',
+                            'naturaleza': 'A',  # Acreedora
+                            'es_deudora': False,
+                            'agrupador_sat': '401.01',
+                            'nivel': 1
+                        }
+                    )
+                    if created:
+                        logger.info(f"✅ Cuenta 401-01 Ventas creada para {factura.empresa.nombre}")
+                
+                # Resolver subcuenta de cliente
                 try:
                     cuenta_cliente = AccountResolver.resolver_cuenta_cliente(
                         empresa=factura.empresa,
@@ -145,33 +186,76 @@ class AccountingService:
                     )
                 except Exception as e:
                     logger.error(f"❌ Error resolviendo cuenta cliente: {e}")
-                    # Fallback a cuenta de plantilla si falla AccountResolver
-                    cuenta_cliente = plantilla.cuenta_flujo
+                    # Fallback a cuenta genérica
+                    cuenta_cliente, _ = CuentaContable.objects.get_or_create(
+                        empresa=factura.empresa,
+                        codigo='105-01',
+                        defaults={'nombre': 'Clientes', 'tipo': 'ACTIVO', 'nivel': 1}
+                    )
                 
-                # Cargo a Flujo (Clientes) -> Total
-                movs.append(MovimientoPoliza(
-                    poliza=poliza, 
-                    cuenta=cuenta_cliente,  # ← SUBCUENTA ESPECÍFICA POR RFC
-                    debe=factura.total, 
-                    haber=0, 
-                    descripcion=f"Cliente: {factura.receptor_nombre[:40]} (RFC: {factura.receptor_rfc})"
-                ))
-                # Abono a Provisión (Ventas) -> Subtotal
-                movs.append(MovimientoPoliza(
-                    poliza=poliza, cuenta=plantilla.cuenta_provision, 
-                    debe=0, haber=factura.subtotal, 
-                    descripcion="Venta de productos/servicios"
-                ))
-                # Abono a Impuesto (IVA Trasladado) -> Impuestos
-                if factura.total_impuestos_trasladados > 0:
-                    if plantilla.cuenta_impuesto:
+                # ASIENTO CONTABLE
+                if es_nota_credito:
+                    # Nota de Crédito: CARGO a Devoluciones, ABONO a Clientes
+                    movs.append(MovimientoPoliza(
+                        poliza=poliza,
+                        cuenta=cuenta_ingreso,  # 402-01 Devoluciones
+                        debe=factura.subtotal,
+                        haber=0,
+                        descripcion="Devolución sobre venta"
+                    ))
+                    # IVA (si aplica)
+                    if factura.total_impuestos_trasladados > 0:
+                        cuenta_iva, _ = CuentaContable.objects.get_or_create(
+                            empresa=factura.empresa,
+                            codigo='119-01',
+                            defaults={'nombre': 'IVA Acreditable', 'tipo': 'ACTIVO', 'nivel': 1}
+                        )
                         movs.append(MovimientoPoliza(
-                            poliza=poliza, cuenta=plantilla.cuenta_impuesto, 
-                            debe=0, haber=factura.total_impuestos_trasladados, 
+                            poliza=poliza,
+                            cuenta=cuenta_iva,
+                            debe=factura.total_impuestos_trasladados,
+                            haber=0,
+                            descripcion="IVA sobre devolución"
+                        ))
+                    # Abono a Cliente (reduce CxC)
+                    movs.append(MovimientoPoliza(
+                        poliza=poliza,
+                        cuenta=cuenta_cliente,
+                        debe=0,
+                        haber=factura.total,
+                        descripcion=f"Devolución a: {factura.receptor_nombre[:40]}"
+                    ))
+                else:
+                    # Venta normal: CARGO a Clientes, ABONO a Ventas
+                    movs.append(MovimientoPoliza(
+                        poliza=poliza,
+                        cuenta=cuenta_cliente,  # ← SUBCUENTA ESPECÍFICA POR RFC
+                        debe=factura.total,
+                        haber=0,
+                        descripcion=f"Cliente: {factura.receptor_nombre[:40]} (RFC: {factura.receptor_rfc})"
+                    ))
+                    # Abono a Ventas (401-01)
+                    movs.append(MovimientoPoliza(
+                        poliza=poliza,
+                        cuenta=cuenta_ingreso,  # 401-01 Ventas
+                        debe=0,
+                        haber=factura.subtotal,
+                        descripcion="Venta de productos/servicios"
+                    ))
+                    # Abono a IVA Trasladado
+                    if factura.total_impuestos_trasladados > 0:
+                        cuenta_iva, _ = CuentaContable.objects.get_or_create(
+                            empresa=factura.empresa,
+                            codigo='216-01',
+                            defaults={'nombre': 'IVA Trasladado', 'tipo': 'PASIVO', 'nivel': 1, 'agrupador_sat': '216.01'}
+                        )
+                        movs.append(MovimientoPoliza(
+                            poliza=poliza,
+                            cuenta=cuenta_iva,
+                            debe=0,
+                            haber=factura.total_impuestos_trasladados,
                             descripcion="IVA Trasladado"
                         ))
-                    else:
-                        raise ValueError("La factura tiene IVA pero la plantilla no tiene cuenta de impuestos configurada.")
 
             # --- EGRESO (E) - Gasto/Compra/Inversión ---
             elif factura.naturaleza == 'E':  # ← CAMBIO CRÍTICO: usar naturaleza
