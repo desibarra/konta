@@ -28,12 +28,15 @@
         <!-- BOTONES DE ACCIÓN MASIVA -->
         {% if facturas_pendientes %}
         <div class="card-body border-bottom bg-light">
-            <div class="d-flex gap-2 align-items-center">
+            <div class="d-flex gap-2 align-items-center flex-wrap">
                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleSelectAll()">
                     <i class="bi bi-check-square"></i> Seleccionar Todo
                 </button>
                 <button type="submit" class="btn btn-sm btn-primary" onclick="return confirmBulk()">
                     <i class="bi bi-calculator"></i> Contabilizar Seleccionados
+                </button>
+                <button type="button" class="btn btn-sm btn-warning" onclick="validarSAT()">
+                    <i class="bi bi-shield-check"></i> 🔍 Validar Estatus SAT
                 </button>
                 <span class="text-muted small ms-auto" id="selected-count">0 seleccionadas</span>
             </div>
@@ -51,6 +54,7 @@
                             <th>Fecha</th>
                             <th>Entidad</th>
                             <th>Naturaleza</th>
+                            <th class="text-center" style="width: 80px;">SAT</th>
                             <th class="text-end">Total</th>
                             <th class="text-end" style="min-width: 250px;">Acciones</th>
                         </tr>
@@ -59,8 +63,13 @@
                         {% for f in facturas_pendientes %}
                         <tr>
                             <td>
+                                {% if f.estado_sat == 'Cancelado' %}
+                                <input type="checkbox" name="factura_ids" value="{{ f.uuid }}"
+                                    class="form-check-input factura-checkbox" disabled title="Factura cancelada en SAT">
+                                {% else %}
                                 <input type="checkbox" name="factura_ids" value="{{ f.uuid }}"
                                     class="form-check-input factura-checkbox">
+                                {% endif %}
                             </td>
                             <td>{{ f.fecha|date:"d M Y" }}</td>
                             <td>
@@ -78,6 +87,25 @@
                                 <span class="badge bg-danger-subtle text-danger">EGRESO</span>
                                 {% else %}
                                 <span class="badge bg-secondary">{{ f.naturaleza }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if f.estado_sat == 'Vigente' %}
+                                <span class="badge bg-success" title="Vigente en SAT">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                </span>
+                                {% elif f.estado_sat == 'Cancelado' %}
+                                <span class="badge bg-danger" title="Cancelado en SAT">
+                                    <i class="bi bi-x-circle-fill"></i>
+                                </span>
+                                {% elif f.estado_sat == 'No Encontrado' %}
+                                <span class="badge bg-warning" title="No encontrado en SAT">
+                                    <i class="bi bi-question-circle-fill"></i>
+                                </span>
+                                {% else %}
+                                <span class="badge bg-secondary" title="Sin validar">
+                                    <i class="bi bi-dash-circle"></i>
+                                </span>
                                 {% endif %}
                             </td>
                             <td class="text-end fw-bold">
@@ -145,19 +173,12 @@
         updateSelectedCount();
     });
 
-    // Actualizar contador cuando se selecciona individual
-    document.querySelectorAll('.factura-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', function () {
-            // Actualizar estado del check-all
-            const total = document.querySelectorAll('.factura-checkbox').length;
-            const checked = document.querySelectorAll('.factura-checkbox:checked').length;
-            document.getElementById('check-all').checked = (checked === total && total > 0);
-
-            updateSelectedCount();
-        });
+    // Actualizar contador al cambiar checkboxes individuales
+    document.querySelectorAll('.factura-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
     });
 
-    // Confirmación antes de enviar
+    // Confirmación de contabilización masiva
     function confirmBulk() {
         const checked = document.querySelectorAll('.factura-checkbox:checked').length;
 

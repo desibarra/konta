@@ -149,7 +149,7 @@ class Factura(models.Model):
     )
 
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name='facturas')
-    uuid = models.UUIDField(unique=True)
+    uuid = models.UUIDField(unique=True, db_index=True)  # ← CRÍTICO: unique=True previene duplicados
     fecha = models.DateTimeField()
     emisor_rfc = models.CharField(max_length=13)
     emisor_nombre = models.CharField(max_length=300)

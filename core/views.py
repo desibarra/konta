@@ -457,3 +457,111 @@ def contabilizar_factura(request, pk):
         messages.error(request, f"Error al contabilizar: {e}")
         
     return redirect('bandeja_contabilizacion')
+
+
+@login_required
+@require_active_empresa
+def validar_sat_lote(request):
+    """
+    Valida el estatus de facturas seleccionadas contra el SAT
+    
+    Recibe UUIDs por POST (JSON) y consulta el servicio SOAP del SAT
+    para determinar si están Vigentes o Canceladas.
+    
+    Si una factura está cancelada, elimina sus pólizas y la marca como EXCLUIDA.
+    """
+    from django.http import JsonResponse
+    from django.utils import timezone
+    from .services.sat_status import SatStatusValidator
+    import json
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+    
+    try:
+        # Parsear JSON
+        data = json.loads(request.body)
+        uuids = data.get('uuids', [])
+        
+        if not uuids:
+            return JsonResponse({'success': False, 'error': 'No se proporcionaron UUIDs'}, status=400)
+        
+        # Obtener empresa activa
+        empresa_id = get_active_empresa_id(request)
+        if not empresa_id:
+            return JsonResponse({'success': False, 'error': 'No hay empresa activa'}, status=400)
+        
+        # Contadores
+        vigentes = 0
+        canceladas = 0
+        no_encontradas = 0
+        errores = 0
+        
+        # Procesar cada factura
+        for uuid_str in uuids:
+            try:
+                # Buscar factura
+                factura = Factura.objects.get(uuid=uuid_str, empresa_id=empresa_id)
+                
+                # Validar con SAT
+                logger.info(f"Validando factura {uuid_str} con SAT...")
+                resultado = SatStatusValidator.validar_factura_model(factura)
+                
+                estado_sat = resultado['estado']
+                
+                # Actualizar estado en BD
+                factura.estado_sat = estado_sat
+                factura.ultima_validacion = timezone.now()
+                factura.save()
+                
+                # Contar y tomar acciones
+                if estado_sat == 'Vigente':
+                    vigentes += 1
+                    logger.info(f"✅ Factura {uuid_str}: Vigente")
+                
+                elif estado_sat == 'Cancelado':
+                    canceladas += 1
+                    logger.warning(f"❌ Factura {uuid_str}: CANCELADA - Eliminando pólizas")
+                    
+                    # Eliminar pólizas contables
+                    polizas = Poliza.objects.filter(factura=factura)
+                    if polizas.exists():
+                        MovimientoPoliza.objects.filter(poliza__in=polizas).delete()
+                        polizas.delete()
+                    
+                    # Marcar como excluida
+                    factura.estado_contable = 'EXCLUIDA'
+                    factura.save()
+                
+                elif estado_sat == 'No Encontrado':
+                    no_encontradas += 1
+                    logger.warning(f"⚠️ Factura {uuid_str}: No encontrada en SAT")
+                
+                else:  # Error
+                    errores += 1
+                    logger.error(f"❌ Error validando {uuid_str}: {resultado.get('mensaje')}")
+            
+            except Factura.DoesNotExist:
+                errores += 1
+                logger.error(f"❌ Factura {uuid_str} no encontrada en BD")
+            
+            except Exception as e:
+                errores += 1
+                logger.error(f"❌ Error procesando {uuid_str}: {e}", exc_info=True)
+        
+        # Respuesta
+        return JsonResponse({
+            'success': True,
+            'vigentes': vigentes,
+            'canceladas': canceladas,
+            'no_encontradas': no_encontradas,
+            'errores': errores,
+            'total': len(uuids)
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+    
+    except Exception as e:
+        logger.error(f"Error en validar_sat_lote: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

@@ -1,0 +1,31 @@
+COMPARATIVO DETALLADO XML
+================================================================================
+
+Fecha: 2025-12-15 19:36:24
+
+FACTURAS SOBRANTES (eliminar de plataforma):
+--------------------------------------------------------------------------------
+6bee6222-bacf-45d0-afd6-b96ec31f1bf8
+eff5c930-aabb-4add-932d-09cea04392fb
+fdddff3e-c9dc-460b-b8f1-6e32d4dbd37a
+ea84a922-5f68-447e-9953-6d2eb1c7cafa
+2d5bc44d-ec54-495c-b717-0992726ff1bd
+7b192d8f-b2a1-408f-8897-10fa221ca17c
+b580b79f-c8b3-4202-ad68-60a62968ec35
+b2453573-29d3-4309-aba0-52c0318efe5d
+203f390f-3977-4540-8ebf-cd5588946847
+861b2d15-9be1-4a9b-9ace-412e06e311b7
+447279b5-3633-412b-9bf9-ad9a74287711
+ce648601-0e46-4049-9f8e-b80f0d3b62c1
+
+
+FACTURAS FALTANTES (subir a plataforma):
+--------------------------------------------------------------------------------
+eff5c0b0-aab0-4c4f-9a2d-0bcea0439f2fb
+fdddf13e-c9dc-460b-b8f1-6e32d4dbd37a
+b580b79f-c8b3-42d2-a2c8-0c062968ec35
+a0335a9c-3977-454d-a2c8-ed558934687f
+6beee2d8-e0c9-45d0-b96e-e3f1fb1d8c31
+ceb48601-0e46-4049-9f8e-b80f0d3b62c1
+e1f2d4b1-5be1-4a9b-9ace-412e06e311d7
+447279b5-3633-412b-9bf9-ad974287711
