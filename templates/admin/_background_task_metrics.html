@@ -1,0 +1,24 @@
+<style>
+  .bt-cards { display:flex; gap:12px; margin-bottom:16px; }
+  .bt-card { flex:1; padding:12px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+  .bt-card h3 { margin:0; font-size:1.25rem; }
+  .bt-pending { background: #fffbe6; border: 1px solid #ffe58f; }
+  .bt-failed  { background: #fff0f0; border: 1px solid #ffccc7; }
+  .bt-completed { background: #f6ffed; border: 1px solid #b7eb8f; }
+  .bt-link { font-weight:700; color:#a80000; }
+</style>
+
+<div class="bt-cards">
+  <div class="bt-card bt-pending text-center">
+    <h3>Pending</h3>
+    <div class="display-6">{{ pending }}</div>
+  </div>
+  <div class="bt-card bt-failed text-center">
+    <h3>Failed</h3>
+    <div class="display-6"><a class="bt-link" href="{{ failed_url }}">{{ failed }}</a></div>
+  </div>
+  <div class="bt-card bt-completed text-center">
+    <h3>Completed today</h3>
+    <div class="display-6">{{ completed_today }}</div>
+  </div>
+</div>

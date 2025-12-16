@@ -11,6 +11,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Use a custom admin index template to inject metrics widget
+from django.contrib import admin as django_admin
+django_admin.site.index_template = 'admin/custom_index.html'
+
 # --- Mixin de Seguridad Multi-Empresa ---
 class EmpresaFilterMixin:
     """
@@ -245,3 +249,28 @@ class PlantillaPolizaAdmin(EmpresaFilterMixin, admin.ModelAdmin):
         # Nota: autocomplete_fields maneja el filtrado via search.
         # EmpresaFilterMixin se encarga de restringir list_display y querysets generales.
         return form
+
+
+# BackgroundTask admin
+from .models import BackgroundTask
+
+
+@admin.register(BackgroundTask)
+class BackgroundTaskAdmin(admin.ModelAdmin):
+    list_display = ('id', 'task_type', 'status', 'attempts', 'created_at', 'started_at', 'finished_at')
+    list_filter = ('task_type', 'status')
+    search_fields = ('task_type',)
+    readonly_fields = ('created_at', 'started_at', 'finished_at', 'error')
+    actions = ['retry_task']
+
+    def retry_task(self, request, queryset):
+        from .tasks import enqueue_contabilizar
+        retried = 0
+        for task in queryset:
+            if task.status != 'COMPLETED':
+                payload = task.payload or {}
+                if task.task_type == 'contabilizar_factura' and payload.get('factura_uuid'):
+                    enqueue_contabilizar(payload.get('factura_uuid'), payload.get('usuario_id'))
+                    retried += 1
+        self.message_user(request, f"{retried} tarea(s) re-encolada(s)")
+    retry_task.short_description = 'Re-enqueue selected tasks'

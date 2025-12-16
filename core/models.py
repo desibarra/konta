@@ -255,3 +255,27 @@ class PlantillaPoliza(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.get_tipo_factura_display()})"
+
+
+class BackgroundTask(models.Model):
+    STATUS_CHOICES = (
+        ('PENDING', 'Pendiente'),
+        ('IN_PROGRESS', 'En Progreso'),
+        ('FAILED', 'Fallida'),
+        ('COMPLETED', 'Completada'),
+    )
+
+    task_type = models.CharField(max_length=100)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    attempts = models.IntegerField(default=0)
+    error = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['status', 'created_at'])]
+
+    def __str__(self):
+        return f"Task {self.id} - {self.task_type} - {self.status}"

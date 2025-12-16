@@ -77,8 +77,22 @@ def upload_xml(request):
             
             for file in files:
                 try:
-                    procesar_xml_cfdi(file, file.name, empresa)
-                    procesadas += 1
+                    factura, created = procesar_xml_cfdi(file, file.name, empresa)
+                    # Si se creó la factura, intentamos contabilizarla automáticamente
+                    if created:
+                        try:
+                            from . import tasks as task_module
+                            task_module.enqueue_contabilizar(factura.uuid, request.user.id)
+                            procesadas += 1
+                        except Exception as e:
+                            errores += 1
+                            logger.error(f"Error encolando contabilización {file.name} (UUID={getattr(factura,'uuid',None)}): {e}")
+                            if len(errores_detalle) < 5:
+                                errores_detalle.append(f"{file.name}: encolado fallido: {str(e)[:100]}")
+                    else:
+                        # Archivo ya existía (duplicado)
+                        # Contamos como procesado para el propósito de upload simple
+                        procesadas += 1
                 except Exception as e:
                     errores += 1
                     # Log detallado en servidor
@@ -149,9 +163,17 @@ def carga_masiva_xml(request):
         for file in files:
             try:
                 # procesar_xml_cfdi returns (factura, created)
-                _, created = procesar_xml_cfdi(file, file.name, empresa)
+                factura, created = procesar_xml_cfdi(file, file.name, empresa)
                 if created:
-                    procesados += 1
+                    try:
+                        from . import tasks as task_module
+                        task_module.enqueue_contabilizar(factura.uuid, request.user.id)
+                        procesados += 1
+                    except Exception as e:
+                        errores += 1
+                        logger.error(f"Error encolando contabilización {file.name} (UUID={getattr(factura,'uuid',None)}): {e}")
+                        if len(errores_detalle) < 5:
+                            errores_detalle.append(f"{file.name}: encolado fallido: {str(e)[:100]}")
                 else:
                     duplicados += 1
             except Exception as e:
@@ -238,6 +260,20 @@ class DashboardView(ListView):
         from datetime import date, timedelta
         
         active_id = self.request.session.get('active_empresa_id')
+        # Exponer objeto Empresa activo (si existe) para plantillas base y controles
+        active_empresa_obj = None
+        if active_id:
+            try:
+                active_empresa_obj = Empresa.objects.filter(id=active_id).first()
+            except Exception:
+                active_empresa_obj = None
+
+        # Nombre a mostrar del usuario
+        user_display = getattr(self.request.user, 'get_full_name', None)
+        if callable(user_display):
+            user_display = self.request.user.get_full_name() or self.request.user.username
+        else:
+            user_display = self.request.user.username
         
         # Obtener rango de fechas actual
         fecha_inicio, fecha_fin = self._get_date_range()
@@ -286,6 +322,10 @@ class DashboardView(ListView):
         
         context['empresas_select'] = empresas_select
         context['empresa_id_seleccionada'] = active_id
+        # Compatibilidad con base.html y otros templates que esperan estas claves
+        context['available_empresas'] = empresas_select
+        context['active_empresa'] = active_empresa_obj
+        context['user_display_name'] = user_display
         
         if active_id:
             # CAMBIO CRÍTICO: Sumar directamente de Factura (flujo operativo)

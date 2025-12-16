@@ -5,11 +5,31 @@
 
 {% block content %}
 {% if not active_empresa %}
-<div class="alert alert-warning d-flex align-items-center shadow-sm" role="alert">
-    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-    <div>
-        <strong>Selecciona una empresa activa para comenzar</strong>
-        <p class="mb-0 small">Usa el selector de empresas en la barra superior.</p>
+<div class="d-flex justify-content-center align-items-center" style="min-height:50vh;">
+    <div class="card shadow-sm" style="max-width:720px; width:100%;">
+        <div class="card-body text-center">
+            <h3 class="card-title mb-2">Bienvenido</h3>
+            <p class="text-muted mb-3">Por favor selecciona una empresa para comenzar.</p>
+
+            {% if available_empresas %}
+            <div class="d-flex justify-content-center flex-wrap gap-2">
+                {% for emp in available_empresas %}
+                <a href="{% url 'switch_empresa' emp.id %}" class="btn btn-outline-primary {% if emp.selected %}btn-primary text-white{% endif %}">
+                    {{ emp.nombre }}
+                </a>
+                {% endfor %}
+            </div>
+            <p class="small text-muted mt-3">También puedes administrarlas en <a href="{% url 'admin:core_empresa_changelist' %}">Empresas</a>.</p>
+            {% else %}
+            <div>
+                <span class="badge bg-warning text-dark">No tienes empresas asignadas</span>
+                {% if user.is_staff %}
+                <p class="mt-2"><a href="{% url 'admin:core_empresa_add' %}" class="btn btn-sm btn-outline-secondary">Crear Empresa</a></p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+        </div>
     </div>
 </div>
 {% else %}

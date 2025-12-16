@@ -1,0 +1,7 @@
+{% extends "admin/index.html" %}
+{% load admin_metrics %}
+
+{% block content %}
+  {% background_task_metrics %}
+  {{ block.super }}
+{% endblock %}

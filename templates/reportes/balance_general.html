@@ -123,9 +123,11 @@
             </div>
 
             <!-- TOTAL PASIVO + CAPITAL -->
+            {% with total_sum=total_pasivo|add:total_capital %}
             <div class="mt-3 p-2 bg-light border rounded text-end fw-bold">
-                <h3>Total Pasivo + Capital: ${{ total_pasivo|add:total_capital|floatformat:2|intcomma }}</h3>
+                <h3>Total Pasivo + Capital: ${{ total_sum|floatformat:2|intcomma }}</h3>
             </div>
+            {% endwith %}
         </div>
     </div>
 
