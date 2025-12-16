@@ -99,33 +99,47 @@ class ReportesEngine:
             movimientopoliza__poliza__factura__estado_contable='CONTABILIZADA'
         )
         
-        # --- INGRESOS (Clase 4) ---
-        ingresos_qs = CuentaContable.objects.filter(
-            empresa=empresa, 
-            codigo__startswith='4'
-        ).annotate(
-            m_haber=Coalesce(Sum('movimientopoliza__haber', filter=filtro_periodo), Value(0, output_field=DecimalField())),
-            m_debe=Coalesce(Sum('movimientopoliza__debe', filter=filtro_periodo), Value(0, output_field=DecimalField()))
-        ).annotate(
-            saldo=F('m_haber') - F('m_debe')
-        ).filter(saldo__gt=0) # Solo mostrar cuentas con movimiento positivo
-        
-        # --- EGRESOS (Clase 6, 5) ---
-        egresos_qs = CuentaContable.objects.filter(
+        # --- INGRESOS y EGRESOS ---
+        # Queremos:
+        # - Ingresos: cuentas clase 4 (haber>debe) y cuentas clase 5 con saldo acreedor (haber>debe)
+        # - Egresos: cuentas clase 6 y cuentas clase 5 con saldo deudor (debe>haber)
+        qs_45_6 = CuentaContable.objects.filter(
             empresa=empresa
         ).filter(
-            Q(codigo__startswith='6') | Q(codigo__startswith='5')
+            Q(codigo__startswith='4') | Q(codigo__startswith='5') | Q(codigo__startswith='6')
         ).annotate(
             m_debe=Coalesce(Sum('movimientopoliza__debe', filter=filtro_periodo), Value(0, output_field=DecimalField())),
             m_haber=Coalesce(Sum('movimientopoliza__haber', filter=filtro_periodo), Value(0, output_field=DecimalField()))
-        ).annotate(
-            saldo=F('m_debe') - F('m_haber')
-        ).filter(saldo__gt=0)
+        )
 
-        # Conversiones a lista y totales
-        lista_ingresos = list(ingresos_qs)
-        lista_egresos = list(egresos_qs)
-        
+        lista_ingresos = []
+        lista_egresos = []
+
+        for c in qs_45_6:
+            # net_credit = haber - debe ; net_debit = debe - haber
+            net = (c.m_haber or 0) - (c.m_debe or 0)
+            if str(c.codigo).startswith('4'):
+                if net > 0:
+                    c.saldo = net
+                    lista_ingresos.append(c)
+            elif str(c.codigo).startswith('5'):
+                if net > 0:
+                    # clase 5 con saldo acreedor → Otros Ingresos
+                    c.saldo = net
+                    lista_ingresos.append(c)
+                else:
+                    # clase 5 con saldo deudor → Gasto/Reducción
+                    saldo_eg = (c.m_debe or 0) - (c.m_haber or 0)
+                    if saldo_eg > 0:
+                        c.saldo = saldo_eg
+                        lista_egresos.append(c)
+            else:
+                # clase 6 → egresos (debe - haber)
+                saldo_eg = (c.m_debe or 0) - (c.m_haber or 0)
+                if saldo_eg > 0:
+                    c.saldo = saldo_eg
+                    lista_egresos.append(c)
+
         total_ingresos = sum(c.saldo for c in lista_ingresos)
         total_egresos = sum(c.saldo for c in lista_egresos)
         

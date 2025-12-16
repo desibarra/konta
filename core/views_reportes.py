@@ -178,9 +178,9 @@ def reporte_balance_general(request):
     # Calcular totales numéricos a partir de las estructuras devueltas por el motor
     capital_list = balance.get('capital_contribuido') or []
     try:
-        total_capital_contribuido = sum(getattr(c, 'saldo', c) for c in capital_list)
+        total_capital_contribuido = sum((getattr(c, 'saldo', c) for c in capital_list), 0)
     except Exception:
-        total_capital_contribuido = balance.get('capital_contribuido', 0) or 0
+        total_capital_contribuido = balance.get('total_capital', balance.get('capital_contribuido', 0)) or 0
 
     total_activo = balance.get('total_activo', 0)
     total_pasivo = balance.get('total_pasivo', 0)
@@ -196,7 +196,12 @@ def reporte_balance_general(request):
     context = {
         'empresa': empresa,
         'fecha_corte': fecha_corte.strftime('%Y-%m-%d'),
-        'capital_contribuido': total_capital_contribuido,
+        # Pass lists to the template (template iterates over these)
+        'activos': balance.get('activos', []),
+        'pasivos': balance.get('pasivos', []),
+        'capital_contribuido': capital_list,
+        # Totals for display
+        'total_capital_contribuido': total_capital_contribuido,
         'utilidad_ejercicio': utilidad_ejercicio,
         'total_activo': total_activo,
         'total_pasivo': total_pasivo,

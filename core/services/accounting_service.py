@@ -638,6 +638,88 @@ class AccountingService:
                 ))
 
             # 5. Validar Cuadre y Ajuste de Centavos
+            # --- Asegurar que los descuentos del XML se registren siempre ---
+            try:
+                # Preferir el descuento declarado en el XML; si es cero, usar el campo factura.descuento
+                if total_descuento and total_descuento != Decimal('0.00'):
+                    monto_descuento = total_descuento
+                else:
+                    monto_descuento = getattr(factura, 'descuento', Decimal('0.00')) or Decimal('0.00')
+            except Exception:
+                monto_descuento = getattr(factura, 'descuento', Decimal('0.00')) or Decimal('0.00')
+
+            if monto_descuento and monto_descuento != Decimal('0.00'):
+                # Verificar si ya hay movimientos de descuento añadidos
+                already = any(
+                    getattr(m.cuenta, 'codigo', '').startswith('402-01') or getattr(m.cuenta, 'codigo', '').startswith('502-01')
+                    for m in movs
+                )
+                if not already:
+                    # Inferir si debemos tratar el descuento como sobre VENTAS (402) o COMPRAS (502)
+                    is_issuer = getattr(factura, 'emisor_rfc', None) == getattr(factura.empresa, 'rfc', None)
+                    is_receiver = getattr(factura, 'receptor_rfc', None) == getattr(factura.empresa, 'rfc', None)
+
+                    # Preferir la naturaleza si es clara
+                    target = None
+                    if factura.naturaleza == 'I' or is_issuer:
+                        target = '402'
+                    elif factura.naturaleza == 'E' or is_receiver:
+                        target = '502'
+                    else:
+                        # Fallback: si el emisor es la empresa -> 402, si el receptor es la empresa -> 502
+                        if is_issuer:
+                            target = '402'
+                        elif is_receiver:
+                            target = '502'
+                        else:
+                            # Último recurso: asignar a 402-01 (impacta resultados)
+                            target = '402'
+
+                    if target == '402':
+                        desc_cta, created = CuentaContable.objects.get_or_create(
+                            empresa=factura.empresa,
+                            codigo='402-01',
+                            defaults={
+                                'nombre': 'Descuentos sobre Ventas',
+                                'tipo': 'GASTO',
+                                'naturaleza': 'D',
+                                'es_deudora': True,
+                                'nivel': 3
+                            }
+                        )
+                        if created:
+                            logger.info(f"✅ Cuenta 402-01 Descuentos creada para {factura.empresa.nombre}")
+
+                        movs.append(MovimientoPoliza(
+                            poliza=poliza,
+                            cuenta=desc_cta,
+                            debe=monto_descuento,
+                            haber=0,
+                            descripcion='Descuento (XML) - registrado automáticamente'
+                        ))
+                    else:
+                        desc_cta, created = CuentaContable.objects.get_or_create(
+                            empresa=factura.empresa,
+                            codigo='502-01',
+                            defaults={
+                                'nombre': 'Descuentos sobre Compras',
+                                'tipo': 'GASTO',
+                                'naturaleza': 'D',
+                                'es_deudora': True,
+                                'nivel': 3
+                            }
+                        )
+                        if created:
+                            logger.info(f"✅ Cuenta 502-01 Descuentos creada para {factura.empresa.nombre}")
+
+                        movs.append(MovimientoPoliza(
+                            poliza=poliza,
+                            cuenta=desc_cta,
+                            debe=0,
+                            haber=monto_descuento,
+                            descripcion='Descuento (XML) - registrado automáticamente'
+                        ))
+
             total_debe = sum(m.debe for m in movs)
             total_haber = sum(m.haber for m in movs)
             
