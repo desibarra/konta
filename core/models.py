@@ -167,6 +167,15 @@ class Factura(models.Model):
     naturaleza = models.CharField(max_length=1, choices=NATURALEZA_CHOICES, default='C')
     estado_contable = models.CharField(max_length=15, choices=ESTADO_CONTABLE_CHOICES, default='PENDIENTE')
     
+    # Nuevo: UsoCFDI del SAT para clasificación automática de gastos/inversiones
+    uso_cfdi = models.CharField(
+        max_length=4,
+        blank=True,
+        null=True,
+        default='G03',
+        help_text='Código de Uso de CFDI del SAT (G01, G03, I04, etc.)'
+    )
+    
     def __str__(self):
         return f"{self.uuid} - {self.emisor_nombre}"
 

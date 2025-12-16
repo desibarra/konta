@@ -83,6 +83,22 @@ def procesar_xml_cfdi(archivo_xml, archivo_nombre, empresa):
     # 1. Validar TipoDeComprobante
     tipo_comprobante = _get_tipo_comprobante(cfdi)
     
+    # 1.5. Extraer UsoCFDI del SAT (para clasificación automática de gastos)
+    uso_cfdi = None
+    try:
+        # Intentar extraer UsoCFDI del nodo Receptor
+        receptor = _get_receptor(cfdi)
+        if hasattr(receptor, 'uso_cfdi'):
+            uso_cfdi = receptor.uso_cfdi
+        elif isinstance(receptor, dict) and 'UsoCFDI' in receptor:
+            uso_cfdi = receptor['UsoCFDI']
+        # Fallback: Buscar en raíz del CFDI
+        if not uso_cfdi:
+            uso_cfdi = cfdi.get('UsoCFDI', 'G03')  # Default G03
+    except Exception as e:
+        logger.warning(f"No se pudo extraer UsoCFDI: {e}. Usando G03 por defecto.")
+        uso_cfdi = 'G03'
+    
     # VALIDACIÓN: Solo rechazar si NO es un tipo CFDI válido
     tipos_validos = ['I', 'E', 'P', 'N', 'T']
     if tipo_comprobante not in tipos_validos:
@@ -162,6 +178,7 @@ def procesar_xml_cfdi(archivo_xml, archivo_nombre, empresa):
         'tipo_comprobante': tipo_comprobante,
         'naturaleza': naturaleza,
         'estado_contable': 'PENDIENTE' if naturaleza in ['I', 'E'] else 'EXCLUIDA',
+        'uso_cfdi': uso_cfdi,  # ← NUEVO: UsoCFDI del SAT para clasificación automática
     }
     # 5. Acceso BLINDADO a Impuestos con fallback a dict
     # Intentamos obtener nodo impuestos

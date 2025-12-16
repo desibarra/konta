@@ -1,12 +1,56 @@
 from django.db import transaction, models
-from core.models import Factura, Poliza, MovimientoPoliza, Empresa, PlantillaPoliza
+from core.models import Factura, Poliza, MovimientoPoliza, Empresa, PlantillaPoliza, CuentaContable
 from core.services.account_resolver import AccountResolver
+from core.services.sat_uso_cfdi_map import get_account_config
 from decimal import Decimal
 import logging
 
 logger = logging.getLogger(__name__)
 
 class AccountingService:
+    @staticmethod
+    def _resolver_cuenta_por_uso_cfdi(empresa, uso_cfdi, factura):
+        """
+        Resuelve la cuenta contable basándose en el UsoCFDI del SAT.
+        Crea la cuenta automáticamente si no existe.
+        
+        Args:
+            empresa: Empresa
+            uso_cfdi: Código UsoCFDI (G01, G03, I04, etc.)
+            factura: Factura (para logging)
+        
+        Returns:
+            CuentaContable: Cuenta resuelta o creada
+        """
+        # Obtener configuración del mapa SAT
+        config = get_account_config(uso_cfdi)
+        
+        # Buscar o crear la cuenta
+        cuenta, created = CuentaContable.objects.get_or_create(
+            empresa=empresa,
+            codigo=config['codigo_base'],
+            defaults={
+                'nombre': config['nombre'],
+                'tipo': config['tipo'],
+                'naturaleza': config['naturaleza'],
+                'es_deudora': config['es_deudora'],
+                'agrupador_sat': config['agrupador'],
+                'nivel': 1  # Cuentas de UsoCFDI son nivel Mayor
+            }
+        )
+        
+        if created:
+            logger.info(
+                f"✅ Cuenta SAT creada: {cuenta.codigo} - {cuenta.nombre} "
+                f"(UsoCFDI: {uso_cfdi}) para {factura.uuid}"
+            )
+        else:
+            logger.debug(
+                f"ℹ️  Cuenta SAT existente: {cuenta.codigo} (UsoCFDI: {uso_cfdi})"
+            )
+        
+        return cuenta
+    
     @staticmethod
     def contabilizar_factura(factura_uuid, usuario_id=None, plantilla_id=None):
         """
@@ -129,12 +173,37 @@ class AccountingService:
                     else:
                         raise ValueError("La factura tiene IVA pero la plantilla no tiene cuenta de impuestos configurada.")
 
-            # --- EGRESO (E) - Gasto/Compra ---
-            elif factura.naturaleza == 'E':  # ← CAMBIO CRÍTICO: usar naturaleza 
-                # Cargo a Provisión (Gasto/Costo) -> Subtotal
+            # --- EGRESO (E) - Gasto/Compra/Inversión ---
+            elif factura.naturaleza == 'E':  # ← CAMBIO CRÍTICO: usar naturaleza
+                # NUEVA LÓGICA: Resolver cuenta por UsoCFDI del SAT
+                # Esto permite clasificar automáticamente:
+                # - G01 → Costo de Ventas (501-01)
+                # - G03 → Gastos Generales (601-01)
+                # - I04 → Equipo de Cómputo (153-01)
+                # - etc.
+                
+                try:
+                    cuenta_gasto = AccountingService._resolver_cuenta_por_uso_cfdi(
+                        empresa=factura.empresa,
+                        uso_cfdi=factura.uso_cfdi or 'G03',  # Default G03 si no tiene
+                        factura=factura
+                    )
+                    logger.info(
+                        f"✅ Cuenta por UsoCFDI '{factura.uso_cfdi or 'G03'}': "
+                        f"{cuenta_gasto.codigo} - {cuenta_gasto.nombre}"
+                    )
+                except Exception as e:
+                    logger.error(f"❌ Error resolviendo UsoCFDI, usando plantilla: {e}")
+                    # Fallback a plantilla si falla
+                    cuenta_gasto = plantilla.cuenta_provision
+                
+                # Cargo a Gasto/Costo/Inversión -> Subtotal
                 movs.append(MovimientoPoliza(
-                    poliza=poliza, cuenta=plantilla.cuenta_provision, 
-                    debe=factura.subtotal, haber=0, descripcion="Gasto Operativo / Compra"
+                    poliza=poliza, 
+                    cuenta=cuenta_gasto,  # ← CUENTA DINÁMICA POR UsoCFDI
+                    debe=factura.subtotal, 
+                    haber=0, 
+                    descripcion=f"{cuenta_gasto.nombre[:50]}"
                 ))
                 # Cargo a Impuesto (IVA Acreditable) -> Impuestos
                 if factura.total_impuestos_trasladados > 0:
