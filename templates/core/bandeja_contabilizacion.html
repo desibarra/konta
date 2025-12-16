@@ -36,7 +36,7 @@
                     <i class="bi bi-calculator"></i> Contabilizar Seleccionados
                 </button>
                 <button type="button" class="btn btn-sm btn-warning" onclick="validarSAT()">
-                    <i class="bi bi-shield-check"></i> 🔍 Validar Estatus SAT
+                    <i class="bi bi-shield-check"></i> 🔄 Verificar Estatus SAT
                 </button>
                 <span class="text-muted small ms-auto" id="selected-count">0 seleccionadas</span>
             </div>
@@ -192,5 +192,56 @@
 
     // Inicializar contador
     updateSelectedCount();
+</script>
+<script>
+    // Enviar los UUIDs seleccionados al endpoint que valida el estatus en SAT
+    async function validarSAT() {
+        const checkboxes = document.querySelectorAll('.factura-checkbox:checked');
+        const uuids = Array.from(checkboxes).map(cb => cb.value);
+
+        if (uuids.length === 0) {
+            alert('Selecciona al menos una factura para validar en SAT.');
+            return;
+        }
+
+        if (!confirm(`¿Verificar estatus SAT de ${uuids.length} factura(s)?`)) return;
+
+        // Obtener CSRF desde cookie
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+        }
+
+        const csrftoken = getCookie('csrftoken');
+
+        const url = '{% url "validar_sat_lote" %}';
+
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({ uuids })
+            });
+
+            const data = await resp.json();
+
+            if (!data.success) {
+                alert('Error: ' + (data.error || 'Respuesta inválida'));
+                return;
+            }
+
+            alert(`Resultados:\nVigentes: ${data.vigentes}\nCanceladas: ${data.canceladas}\nNo encontradas: ${data.no_encontradas}\nErrores: ${data.errores}`);
+            // Refrescar la página para actualizar badges/checkboxes
+            window.location.reload();
+
+        } catch (e) {
+            alert('Error en la validación SAT: ' + e.message);
+            console.error(e);
+        }
+    }
 </script>
 {% endblock %}

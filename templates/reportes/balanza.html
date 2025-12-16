@@ -38,16 +38,35 @@
                 </thead>
                 <tbody>
                     {% for cuenta in cuentas %}
-                    <tr>
-                        <td class="fw-bold">{{ cuenta.codigo }}</td>
-                        <td>{{ cuenta.nombre }}</td>
+                    {# Determinar clases según nivel: nivel1 -> mayor (negrita + fondo), nivel2 -> subcuenta (indent), nivel3 -> auxiliar (más indent) #}
+                    {% if cuenta.nivel == 1 %}
+                    <tr class="table-secondary fw-bold">
+                        <td>{{ cuenta.codigo }}</td>
+                        <td class="fw-bold">{{ cuenta.nombre }}</td>
                         <td class="text-end font-monospace">{{ cuenta.saldo_inicial|floatformat:2|intcomma }}</td>
-                        <td class="text-end font-monospace text-primary">{{
-                            cuenta.movimientos_debe|floatformat:2|intcomma }}</td>
-                        <td class="text-end font-monospace text-primary">{{
-                            cuenta.movimientos_haber|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace text-primary">{{ cuenta.movimientos_debe|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace text-primary">{{ cuenta.movimientos_haber|floatformat:2|intcomma }}</td>
                         <td class="text-end font-monospace fw-bold">{{ cuenta.saldo_final|floatformat:2|intcomma }}</td>
                     </tr>
+                    {% elif cuenta.nivel == 2 %}
+                    <tr>
+                        <td>{{ cuenta.codigo }}</td>
+                        <td class="ps-4">{{ cuenta.nombre }}</td>
+                        <td class="text-end font-monospace">{{ cuenta.saldo_inicial|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace text-primary">{{ cuenta.movimientos_debe|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace text-primary">{{ cuenta.movimientos_haber|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace fw-bold">{{ cuenta.saldo_final|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td>{{ cuenta.codigo }}</td>
+                        <td class="ps-5">{{ cuenta.nombre }}</td>
+                        <td class="text-end font-monospace">{{ cuenta.saldo_inicial|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace text-primary">{{ cuenta.movimientos_debe|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace text-primary">{{ cuenta.movimientos_haber|floatformat:2|intcomma }}</td>
+                        <td class="text-end font-monospace fw-bold">{{ cuenta.saldo_final|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endif %}
                     {% empty %}
                     <tr>
                         <td colspan="6" class="text-center text-muted py-3">Sin movimientos.</td>

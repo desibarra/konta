@@ -15,10 +15,9 @@ class ContabilidadEngine:
         Calcula el Estado de Resultados (Cuentas Nominales) para un periodo.
         Retorna: { 'ingresos': [], 'egresos': [], 'utilidad_neta': Decimal, ... }
         """
-        # Filtro Base: Movimientos del periodo en pólizas contabilizadas
+        # Filtro Base: Movimientos del periodo (sin filtrar por estado de factura)
         filtro_periodo = Q(
-            movimientopoliza__poliza__fecha__range=[fecha_inicio, fecha_fin],
-            movimientopoliza__poliza__factura__estado_contable='CONTABILIZADA'
+            movimientopoliza__poliza__fecha__range=[fecha_inicio, fecha_fin]
         )
 
         # Helper para anotar saldo del periodo
@@ -46,12 +45,31 @@ class ContabilidadEngine:
         total_egresos = sum(c.saldo for c in egresos)
         utilidad_neta = total_ingresos - total_egresos
 
+        # Cálculo explícito de Subtotal (Ventas) vs IVA (trasladado)
+        # Heurística: cuentas de ventas suelen empezar por '401' o '4', IVA trasladado por '216' o '216-01'
+        subtotal_qs = CuentaContable.objects.filter(empresa=empresa).filter(Q(codigo__startswith='401') | Q(codigo__startswith='4'))
+        iva_qs = CuentaContable.objects.filter(empresa=empresa).filter(Q(codigo__startswith='216') | Q(codigo__icontains='iva'))
+
+        subtotal = sum(
+            c.m_haber if hasattr(c, 'm_haber') else (
+                c.movimientopoliza_set.filter(poliza__fecha__range=[fecha_inicio, fecha_fin]).aggregate(total=Sum('haber'))['total'] or 0
+            ) for c in subtotal_qs
+        )
+
+        iva_trasladado = sum(
+            c.m_haber if hasattr(c, 'm_haber') else (
+                c.movimientopoliza_set.filter(poliza__fecha__range=[fecha_inicio, fecha_fin]).aggregate(total=Sum('haber'))['total'] or 0
+            ) for c in iva_qs
+        )
+
         return {
             'ingresos': ingresos,
             'egresos': egresos,
             'total_ingresos': total_ingresos,
             'total_egresos': total_egresos,
-            'utilidad_neta': utilidad_neta
+            'utilidad_neta': utilidad_neta,
+            'subtotal_ventas': subtotal,
+            'iva_trasladado': iva_trasladado
         }
 
     @staticmethod
@@ -60,10 +78,9 @@ class ContabilidadEngine:
         Calcula el Balance General (Cuentas Reales) acumulado hasta fecha_corte.
         Integra la Utilidad del Ejercicio (ER) al Capital.
         """
-        # Filtro Acumulado: Todo movimiento hasta la fecha de corte
+        # Filtro Acumulado: Todo movimiento hasta la fecha de corte (sin filtrar por estado de factura)
         filtro_acumulado = Q(
-            movimientopoliza__poliza__fecha__lte=fecha_corte,
-            movimientopoliza__poliza__factura__estado_contable='CONTABILIZADA'
+            movimientopoliza__poliza__fecha__lte=fecha_corte
         )
 
         def annotate_saldo_acum(queryset, naturaleza):

@@ -11,27 +11,24 @@ class ReportesEngine:
         CORRECCIÓN FINAL:
         - Campos reales: 'debe' y 'haber' (MovimientoPoliza).
         - Relación inversa: 'movimientopoliza' (Default de Django para FK singleton).
-        - Filtro Estado: poliza -> factura -> estado_contable.
+        - Filtro Estado: poliza -> factura -> estado_contable
         """
         
         cuentas = CuentaContable.objects.filter(empresa=empresa)
         
         # --- DEFINICIÓN DE FILTROS ---
         
-        # Filtro: Pólizas Contabilizadas
-        # Poliza tiene OneToOne a Factura. Factura tiene 'estado_contable'.
-        # Ruta: movimientopoliza -> poliza -> factura -> estado_contable
+        # SIMPLIFICADO: Solo filtrar por fecha, sin estado_contable
+        # Esto asegura que TODOS los movimientos se muestren
         
         # 1. Movimientos PREVIOS (Saldo Inicial)
         filtro_previo = Q(
-            movimientopoliza__poliza__fecha__lt=fecha_inicio,
-            movimientopoliza__poliza__factura__estado_contable='CONTABILIZADA'
+            movimientopoliza__poliza__fecha__lt=fecha_inicio
         )
         
         # 2. Movimientos PERIODO
         filtro_periodo = Q(
-            movimientopoliza__poliza__fecha__range=[fecha_inicio, fecha_fin],
-            movimientopoliza__poliza__factura__estado_contable='CONTABILIZADA'
+            movimientopoliza__poliza__fecha__range=[fecha_inicio, fecha_fin]
         )
         
         # --- AGREGACIONES ---
@@ -77,6 +74,14 @@ class ReportesEngine:
                 output_field=DecimalField(max_digits=20, decimal_places=2)
             )
         )
+        
+        # Mostrar todas las cuentas que tengan movimientos en MovimientoPoliza
+        cuentas = cuentas.filter(
+            Q(suma_debe_previo__gt=0) | Q(suma_haber_previo__gt=0) |
+            Q(movimientos_debe__gt=0) | Q(movimientos_haber__gt=0)
+        ).order_by('codigo')
+
+        return cuentas
         
     @staticmethod
     def obtener_estado_resultados(empresa, fecha_inicio, fecha_fin):
@@ -130,4 +135,20 @@ class ReportesEngine:
             'total_ingresos': total_ingresos,
             'total_egresos': total_egresos,
             'utilidad_neta': total_ingresos - total_egresos
+        }
+
+    @staticmethod
+    def calcular_utilidad_neta(empresa, fecha_inicio, fecha_fin):
+        """
+        Calcula y retorna los totales de Ingresos, Egresos y la Utilidad Neta
+        para el periodo indicado. Esta función unifica la lógica que debe
+        usarse tanto en Estado de Resultados como en Balance General.
+
+        Retorna: dict { 'total_ingresos', 'total_egresos', 'utilidad_neta' }
+        """
+        res = ReportesEngine.obtener_estado_resultados(empresa, fecha_inicio, fecha_fin)
+        return {
+            'total_ingresos': res.get('total_ingresos', 0),
+            'total_egresos': res.get('total_egresos', 0),
+            'utilidad_neta': res.get('utilidad_neta', 0)
         }
