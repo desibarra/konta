@@ -27,6 +27,7 @@ urlpatterns = [
     path('contabilidad/bandeja/', views.BandejaContabilizacionView.as_view(), name='bandeja_contabilizacion'),
     path('contabilidad/contabilizar/<uuid:pk>/', views.contabilizar_factura, name='contabilizar_factura'),
     path('contabilizar-lote/', contabilizar_lote, name='contabilizar_lote'),  # Bulk contabilization
+    path('validar-sat-lote/', views.validar_sat_lote, name='validar_sat_lote'),  # SAT validation
     
     # Reportes
     path('reportes/balanza/', reporte_balanza, name='reporte_balanza'),

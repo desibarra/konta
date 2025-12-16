@@ -176,6 +176,25 @@ class Factura(models.Model):
         help_text='Código de Uso de CFDI del SAT (G01, G03, I04, etc.)'
     )
     
+    # Validación SAT
+    estado_sat = models.CharField(
+        max_length=20,
+        choices=[
+            ('Sin Validar', 'Sin Validar'),
+            ('Vigente', 'Vigente'),
+            ('Cancelado', 'Cancelado'),
+            ('No Encontrado', 'No Encontrado'),
+            ('Error', 'Error'),
+        ],
+        default='Sin Validar',
+        help_text='Estado de la factura en el SAT'
+    )
+    ultima_validacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Fecha y hora de la última validación con el SAT'
+    )
+    
     def __str__(self):
         return f"{self.uuid} - {self.emisor_nombre}"
 
