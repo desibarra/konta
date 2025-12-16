@@ -82,11 +82,13 @@ class AccountingService:
                 plantilla_usada=plantilla
             )
 
-            # 4. Generar Movimientos según Tipo de CFDI
+            # 4. Generar Movimientos según NATURALEZA (I/E)
+            # CRÍTICO: Usar naturaleza en lugar de tipo_comprobante
+            # porque facturas de egreso pueden tener tipo_comprobante='I' en el XML
             movs = []
             
             # --- INGRESO (I) - Factura Emitida ---
-            if factura.tipo_comprobante == 'I': 
+            if factura.naturaleza == 'I':  # ← CAMBIO CRÍTICO: usar naturaleza
                 # CAMBIO CRÍTICO: Usar AccountResolver para subcuenta específica del cliente
                 try:
                     cuenta_cliente = AccountResolver.resolver_cuenta_cliente(
@@ -128,7 +130,7 @@ class AccountingService:
                         raise ValueError("La factura tiene IVA pero la plantilla no tiene cuenta de impuestos configurada.")
 
             # --- EGRESO (E) - Gasto/Compra ---
-            elif factura.tipo_comprobante == 'E': 
+            elif factura.naturaleza == 'E':  # ← CAMBIO CRÍTICO: usar naturaleza 
                 # Cargo a Provisión (Gasto/Costo) -> Subtotal
                 movs.append(MovimientoPoliza(
                     poliza=poliza, cuenta=plantilla.cuenta_provision, 
