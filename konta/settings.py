@@ -86,7 +86,6 @@ DATABASES = {
 }
 
 # Configuración opcional: PostgreSQL (Producción / Avanzado)
-# Para usar PostgreSQL, comenta la configuración de SQLite de arriba y descomenta esta:
 # DATABASES = {
 #     'default': {
 #         'ENGINE': 'django.db.backends.postgresql',
@@ -155,6 +154,7 @@ LOGGING = {
         'level': 'INFO',
     },
 }
+
 # Configuración de Autenticación
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
@@ -166,3 +166,11 @@ SESSION_SAVE_EVERY_REQUEST = True  # Guardar en cada request
 SESSION_COOKIE_AGE = 86400  # 24 horas
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
+
+# --- CONFIGURACIÓN PARA SUBIDA MASIVA (SOLUCIÓN AL ERROR) ---
+# Permite subir hasta 2000 archivos en una sola selección (Default de Django es 100)
+DATA_UPLOAD_MAX_NUMBER_FILES = 2000
+
+# Aumenta el límite de memoria de la petición a 5MB (Default 2.5MB)
+# Esto ayuda si subes muchos XML juntos para que no corte la conexión.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880

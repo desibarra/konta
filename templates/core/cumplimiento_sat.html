@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Cumplimiento SAT{% endblock %}
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2>Zona Fiscal - Cumplimiento SAT</h2>
+      <p class="text-muted">Genera archivos para SAT (Anexo 24) y reportes gerenciales.</p>
+    </div>
+    <div>
+      <form method="get" class="d-flex gap-2">
+        <select name="year" class="form-select">
+          {% for y in 2020|make_list %}{% endfor %}
+          {% for y in (2020|to:now.year) %}{% endfor %}
+        </select>
+      </form>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-4 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5>Catálogo de Cuentas</h5>
+          <p class="text-muted small">XML (SAT)</p>
+          <a href="?doc=catalogo&fmt=xml&year={{ year }}&month={{ month }}" class="btn btn-outline-primary">Descargar XML SAT</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5>Balanza de Comprobación</h5>
+          <p class="text-muted small">XML / Excel / PDF</p>
+          <a href="?doc=balanza&fmt=xml&year={{ year }}&month={{ month }}" class="btn btn-outline-primary me-1">XML SAT</a>
+          <a href="?doc=balanza&fmt=xlsx&year={{ year }}&month={{ month }}" class="btn btn-outline-secondary me-1">Excel</a>
+          <a href="?doc=balanza&fmt=pdf&year={{ year }}&month={{ month }}" class="btn btn-outline-success">PDF</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5>Pólizas</h5>
+          <p class="text-muted small">XML (SAT)</p>
+          <a href="?doc=polizas&fmt=xml&year={{ year }}&month={{ month }}" class="btn btn-outline-primary">Descargar XML SAT</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

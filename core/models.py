@@ -95,6 +95,7 @@ class CuentaContable(models.Model):
         null=True,
         help_text="Código agrupador SAT Anexo 24 (ej: 101.01). DEBE heredarse a subcuentas."
     )
+    codigo_sat = models.CharField(max_length=20, blank=True, null=True, db_index=True, help_text='Código agrupador SAT (Anexo 24)')
     nivel = models.IntegerField(
         default=1,
         choices=[(1, 'Mayor'), (2, 'Subcuenta'), (3, 'Auxiliar')],
@@ -255,6 +256,19 @@ class PlantillaPoliza(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.get_tipo_factura_display()})"
+
+
+class SatCodigo(models.Model):
+    codigo = models.CharField(max_length=20, unique=True, db_index=True)
+    nombre = models.CharField(max_length=255)
+    descripcion = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Código SAT'
+        verbose_name_plural = 'Códigos SAT'
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
 
 
 class BackgroundTask(models.Model):

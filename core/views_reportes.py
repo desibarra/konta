@@ -6,6 +6,8 @@ from core.models import Empresa
 from core.services.reportes_engine import ReportesEngine
 from core.services.contabilidad_engine import ContabilidadEngine
 from .decorators import require_active_empresa
+from decimal import Decimal
+from core.models import CuentaContable, MovimientoPoliza
 
 @login_required
 @require_active_empresa
@@ -124,25 +126,58 @@ def reporte_estado_resultados(request):
     fecha_inicio = parse_date(f_ini) if f_ini else default_start
     fecha_fin = parse_date(f_fin) if f_fin else default_end
     
-    # Llamada al motor principal para listas y detalles
-    data = ContabilidadEngine.obtener_resultados(empresa, fecha_inicio, fecha_fin)
+    # Nuevo comportamiento: desglosar cuenta por cuenta usando MovimientoPoliza
+    # Ingresos: cuentas de tipo 'INGRESO'
+    ingresos_qs = CuentaContable.objects.filter(empresa=empresa, tipo='INGRESO')
+    egresos_qs = CuentaContable.objects.filter(empresa=empresa, tipo__in=['COSTO', 'GASTO'])
 
-    # PROTECCIÓN CONTRA NONETYPE
-    if data is None:
-        data = {'ingresos': [], 'egresos': [], 'total_ingresos': 0, 'total_egresos': 0, 'utilidad_neta': 0}
+    def saldo_para_cuenta(cuenta):
+        # Sumar movimientos dentro del periodo
+        movs = MovimientoPoliza.objects.filter(
+            cuenta=cuenta,
+            poliza__fecha__date__gte=fecha_inicio,
+            poliza__fecha__date__lte=fecha_fin
+        )
+        total_debe = movs.aggregate(total=Sum('debe'))['total'] or Decimal('0')
+        total_haber = movs.aggregate(total=Sum('haber'))['total'] or Decimal('0')
 
-    # Unificar cálculo de utilidad vía ReportesEngine (DRY)
-    calc = ReportesEngine.calcular_utilidad_neta(empresa, fecha_inicio, fecha_fin)
+        # Naturaleza: 'A' (acreedora) -> saldo = haber - debe
+        if getattr(cuenta, 'naturaleza', 'D') == 'A':
+            saldo = (total_haber or Decimal('0')) - (total_debe or Decimal('0'))
+        else:
+            saldo = (total_debe or Decimal('0')) - (total_haber or Decimal('0'))
+        return saldo
+
+    from django.db.models import Sum
+    ingresos = []
+    total_ingresos = Decimal('0')
+    for c in ingresos_qs:
+        s = saldo_para_cuenta(c)
+        if s == 0:
+            continue
+        ingresos.append({'codigo': c.codigo, 'nombre': c.nombre, 'saldo': s})
+        total_ingresos += s
+
+    egresos = []
+    total_egresos = Decimal('0')
+    for c in egresos_qs:
+        s = saldo_para_cuenta(c)
+        if s == 0:
+            continue
+        egresos.append({'codigo': c.codigo, 'nombre': c.nombre, 'saldo': s})
+        total_egresos += s
+
+    utilidad_neta = total_ingresos - total_egresos
 
     context = {
         'empresa': empresa,
         'fecha_inicio': fecha_inicio.strftime('%Y-%m-%d'),
         'fecha_fin': fecha_fin.strftime('%Y-%m-%d'),
-        'ingresos': data.get('ingresos', []),
-        'egresos': data.get('egresos', []),
-        'total_ingresos': calc.get('total_ingresos', data.get('total_ingresos', 0)),
-        'total_egresos': calc.get('total_egresos', data.get('total_egresos', 0)),
-        'utilidad_neta': calc.get('utilidad_neta', data.get('utilidad_neta', 0)),
+        'ingresos': ingresos,
+        'egresos': egresos,
+        'total_ingresos': total_ingresos,
+        'total_egresos': total_egresos,
+        'utilidad_neta': utilidad_neta,
     }
     return render(request, 'reportes/estado_resultados.html', context)
 

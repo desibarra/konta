@@ -43,21 +43,29 @@
                 <div class="card-header bg-success text-white fw-bold">Ingresos</div>
                 <div class="card-body p-0">
                     <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th class="text-end">Saldo</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {% for cta in ingresos %}
                             <tr>
+                                <td>{{ cta.codigo }}</td>
                                 <td>{{ cta.nombre }}</td>
                                 <td class="text-end font-monospace">{{ cta.saldo|floatformat:2|intcomma }}</td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="2" class="text-center text-muted">Sin ingresos en el periodo</td>
+                                <td colspan="3" class="text-center text-muted">Sin ingresos en el periodo</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                         <tfoot class="table-light fw-bold">
                             <tr>
-                                <td>Total Ingresos</td>
+                                <td colspan="2">Total Ingresos</td>
                                 <td class="text-end font-monospace">{{ total_ingresos|floatformat:2|intcomma }}</td>
                             </tr>
                         </tfoot>
@@ -72,21 +80,29 @@
                 <div class="card-header bg-danger text-white fw-bold">Egresos</div>
                 <div class="card-body p-0">
                     <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th class="text-end">Saldo</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {% for cta in egresos %}
                             <tr>
+                                <td>{{ cta.codigo }}</td>
                                 <td>{{ cta.nombre }}</td>
                                 <td class="text-end font-monospace">{{ cta.saldo|floatformat:2|intcomma }}</td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="2" class="text-center text-muted">Sin egresos en el periodo</td>
+                                <td colspan="3" class="text-center text-muted">Sin egresos en el periodo</td>
                             </tr>
                             {% endfor %}
                         </tbody>
                         <tfoot class="table-light fw-bold">
                             <tr>
-                                <td>Total Egresos</td>
+                                <td colspan="2">Total Egresos</td>
                                 <td class="text-end font-monospace">{{ total_egresos|floatformat:2|intcomma }}</td>
                             </tr>
                         </tfoot>

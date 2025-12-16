@@ -554,8 +554,8 @@ class AccountingService:
                             descripcion="IVA Acreditable"
                         ))
                     else:
-                         raise ValueError("La factura tiene impuestos pero la plantilla no tiene cuenta de impuestos configurada.")
-                
+                        raise ValueError("La factura tiene impuestos pero la plantilla no tiene cuenta de impuestos configurada.")
+
                 # CAMBIO CRÍTICO: Usar AccountResolver para subcuenta específica del proveedor
                 try:
                     cuenta_proveedor = AccountResolver.resolver_cuenta_proveedor(
@@ -614,7 +614,6 @@ class AccountingService:
                             'tipo': 'GASTO',
                             'naturaleza': 'D',
                             'es_deudora': True,
-                            'level': 3,
                             'nivel': 3
                         }
                     )
@@ -720,14 +719,61 @@ class AccountingService:
                             descripcion='Descuento (XML) - registrado automáticamente'
                         ))
 
-            total_debe = sum(m.debe for m in movs)
-            total_haber = sum(m.haber for m in movs)
-            
-            diff = total_debe - total_haber
-            if abs(diff) > 0 and abs(diff) < 0.1:
-                if diff > 0: movs[-1].haber += diff
-                else: movs[-1].debe += abs(diff)
-            
+            # Revertir ajustes en cuentas sensibles (Retenciones e IVA)
+            if total_iva_trasladado > 0:
+                if plantilla.cuenta_impuesto:
+                    movs.append(MovimientoPoliza(
+                        poliza=poliza, cuenta=plantilla.cuenta_impuesto, 
+                        debe=total_iva_trasladado, haber=0, 
+                        descripcion="IVA Acreditable"
+                    ))
+                else:
+                    raise ValueError("La factura tiene impuestos pero la plantilla no tiene cuenta de impuestos configurada.")
+
+            if retenciones > 0:
+                cuenta_retenciones, _ = CuentaContable.objects.get_or_create(
+                    empresa=factura.empresa,
+                    codigo='213-01',
+                    defaults={'nombre': 'Retenciones por Pagar', 'tipo': 'PASIVO', 'nivel': 1}
+                )
+                movs.append(MovimientoPoliza(
+                    poliza=poliza, cuenta=cuenta_retenciones,
+                    debe=0, haber=retenciones,
+                    descripcion="Retenciones por Pagar"
+                ))
+
+            # Ajuste final en cuenta de resultados para garantizar cuadre
+            total_debe = sum(mov.debe for mov in movs)
+            total_haber = sum(mov.haber for mov in movs)
+            diferencia = total_debe - total_haber
+
+            if abs(diferencia) > Decimal('0.01'):
+                cuenta_ajuste, _ = CuentaContable.objects.get_or_create(
+                    empresa=factura.empresa,
+                    codigo='702-99',  # Código estándar para ajustes por redondeo
+                    defaults={'nombre': 'Ajuste por Diferencias de Redondeo', 'tipo': 'RESULTADO', 'nivel': 1}
+                )
+                if diferencia > 0:
+                    movs.append(MovimientoPoliza(
+                        poliza=poliza, cuenta=cuenta_ajuste,
+                        debe=0, haber=abs(diferencia),
+                        descripcion="Ajuste por Redondeo"
+                    ))
+                else:
+                    movs.append(MovimientoPoliza(
+                        poliza=poliza, cuenta=cuenta_ajuste,
+                        debe=abs(diferencia), haber=0,
+                        descripcion="Ajuste por Redondeo"
+                    ))
+
+            # Validate Debe == Haber
+            total_debe = sum(mov.debe for mov in movs)
+            total_haber = sum(mov.haber for mov in movs)
+
+            if total_debe != total_haber:
+                logger.error(f"❌ Desbalance en póliza generada: Debe={total_debe}, Haber={total_haber}, Factura={factura.uuid}")
+                raise ValueError(f"Desbalance en póliza generada para factura {factura.uuid}. Revise la plantilla utilizada.")
+
             # Guardar Movimientos
             MovimientoPoliza.objects.bulk_create(movs)
             

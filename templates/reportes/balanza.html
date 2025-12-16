@@ -16,8 +16,25 @@
                     <label class="form-label fw-bold">Fecha Fin</label>
                     <input type="date" class="form-control" name="fecha_fin" value="{{ fecha_fin }}">
                 </div>
-                <div class="col-md-2">
-                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary w-50">Filtrar</button>
+
+                    <div class="btn-group w-50">
+                        <button type="button" class="btn btn-outline-secondary dropdown-toggle w-100" data-bs-toggle="dropdown" aria-expanded="false">
+                            Exportar
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" target="_blank" href="{% url 'cumplimiento_sat_download' %}?doc=balanza&fmt=pdf&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}">📄 PDF (Imprimir)</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" target="_blank" href="{% url 'cumplimiento_sat_download' %}?doc=balanza&fmt=xlsx&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}">📊 Excel (XLSX)</a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" target="_blank" href="{% url 'cumplimiento_sat_download' %}?doc=balanza&fmt=xml&fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}">🏛️ XML SAT (Anexo 24)</a>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </form>
         </div>

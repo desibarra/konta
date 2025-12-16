@@ -1,0 +1,100 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page { size: A4; margin: 20mm; }
+    body { font-family: DejaVu Sans, Helvetica, Arial, sans-serif; font-size: 10pt; color: #222; }
+    .header-table { width: 100%; border-collapse: collapse; }
+    .logo-cell { width: 30%; vertical-align: middle; }
+    .title-cell { width: 70%; text-align: center; vertical-align: middle; }
+    .empresa-name { font-size: 16pt; font-weight: bold; }
+    .rfc { font-size: 10pt; color: #555; }
+    .period { font-size: 12pt; margin-top: 4px; }
+
+    .balances { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .balances th, .balances td { border: 1px solid #cfcfcf; padding: 8px 10px; }
+    .balances th { background: #f0f0f0; font-weight: bold; text-align: left; }
+    .right { text-align: right; }
+    .left { text-align: left; }
+
+    .footer { width: 100%; position: fixed; bottom: 10mm; font-size: 9pt; color: #444; }
+    .footer-table { width: 100%; border-collapse: collapse; }
+    .sig-cell { width: 50%; text-align: center; }
+    .sig-line { margin-top: 28px; border-top: 1px solid #000; width: 60%; margin-left: auto; margin-right: auto; }
+
+    /* page numbering for xhtml2pdf */
+    .pagenum { position: fixed; bottom: 4mm; right: 20mm; font-size: 9pt; }
+  </style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td class="logo-cell">
+        {% if logo_data_uri %}
+          <img src="{{ logo_data_uri }}" alt="logo" style="height:64px; object-fit:contain;" />
+        {% else %}
+          {# Try static logo path; if missing, render company initials block #}
+          {% load static %}
+          {% with logo_path='images/logo.png' %}
+            <img src="{{ STATIC_URL }}{{ logo_path }}" alt="logo" style="height:64px; object-fit:contain;" onerror="this.style.display='none'" />
+          {% endwith %}
+        {% endif %}
+      </td>
+      <td class="title-cell">
+        <div>
+          <div class="empresa-name">{{ empresa.nombre }}</div>
+          <div class="rfc">RFC: {{ empresa.rfc }}</div>
+          <div class="period">Balanza de Comprobación<br/><small>Del {{ periodo_inicio }} al {{ periodo_fin }}</small></div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <table class="balances">
+    <thead>
+      <tr>
+        <th style="width:15%">Cuenta</th>
+        <th style="width:45%">Nombre</th>
+        <th class="right" style="width:15%">Saldo Inicial</th>
+        <th class="right" style="width:10%">Debe</th>
+        <th class="right" style="width:10%">Haber</th>
+        <th class="right" style="width:15%">Saldo Final</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td class="left">{{ row.codigo }}</td>
+        <td class="left">{{ row.nombre }}</td>
+        <td class="right">${{ row.saldo_ini }}</td>
+        <td class="right">${{ row.debe }}</td>
+        <td class="right">${{ row.haber }}</td>
+        <td class="right">${{ row.saldo_fin }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <table class="footer-table">
+      <tr>
+        <td class="sig-cell">
+          <div>Elaboró</div>
+          <div class="sig-line"></div>
+        </td>
+        <td class="sig-cell">
+          <div>Autorizó</div>
+          <div class="sig-line"></div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="pagenum">
+    Página <pdf:pagenumber/> de <pdf:pagecount/>
+  </div>
+
+</body>
+</html>

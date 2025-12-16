@@ -145,3 +145,52 @@ class ContabilidadEngine:
             'cuadra': cuadra,
             'diferencia': diferencia
         }
+
+    @staticmethod
+    def calcular_balanza(empresa, fecha_inicio, fecha_fin):
+        """
+        Calcula saldos para la Balanza de Comprobación en un periodo.
+        Retorna lista de dicts: {'codigo','nombre','saldo_ini','debe','haber','saldo_fin','codigo_sat','nivel'}
+        """
+        from decimal import Decimal
+        cuentas = CuentaContable.objects.filter(empresa=empresa).order_by('codigo')
+        rows = []
+
+        for c in cuentas:
+            # Saldos antes del periodo (acumulado hasta día previo)
+            antes_qs = MovimientoPoliza.objects.filter(
+                cuenta=c,
+                poliza__fecha__date__lt=fecha_inicio
+            )
+            antes_debe = antes_qs.aggregate(total=Sum('debe'))['total'] or Decimal('0')
+            antes_haber = antes_qs.aggregate(total=Sum('haber'))['total'] or Decimal('0')
+
+            # Movimientos en periodo
+            periodo_qs = MovimientoPoliza.objects.filter(
+                cuenta=c,
+                poliza__fecha__date__gte=fecha_inicio,
+                poliza__fecha__date__lte=fecha_fin
+            )
+            mov_debe = periodo_qs.aggregate(total=Sum('debe'))['total'] or Decimal('0')
+            mov_haber = periodo_qs.aggregate(total=Sum('haber'))['total'] or Decimal('0')
+
+            # Naturaleza: 'A' acreedora => saldo = haber - debe
+            if getattr(c, 'naturaleza', 'D') == 'A':
+                saldo_ini = (antes_haber or Decimal('0')) - (antes_debe or Decimal('0'))
+                saldo_fin = saldo_ini + ((mov_haber or Decimal('0')) - (mov_debe or Decimal('0')))
+            else:
+                saldo_ini = (antes_debe or Decimal('0')) - (antes_haber or Decimal('0'))
+                saldo_fin = saldo_ini + ((mov_debe or Decimal('0')) - (mov_haber or Decimal('0')))
+
+            rows.append({
+                'codigo': c.codigo,
+                'nombre': c.nombre,
+                'saldo_ini': saldo_ini,
+                'debe': mov_debe,
+                'haber': mov_haber,
+                'saldo_fin': saldo_fin,
+                'codigo_sat': getattr(c, 'codigo_sat', ''),
+                'nivel': getattr(c, 'nivel', 1)
+            })
+
+        return rows

@@ -4,6 +4,7 @@ from django.views.generic import ListView, DetailView
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.db.models import Sum, Q, F
+from django.db import transaction  # <--- MODIFICACIÓN 1: Importar la funcionalidad de transacciones
 from django.http import FileResponse
 from .forms import UploadXMLForm
 from .services.xml_processor import procesar_xml_cfdi
@@ -12,6 +13,9 @@ from .models import Factura, Empresa, CuentaContable, UsuarioEmpresa, Movimiento
 from .decorators import require_active_empresa
 import logging
 import os
+from django.http import FileResponse, HttpResponseBadRequest
+from .services.export_service import ExportService
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +28,9 @@ def get_active_empresa_id(request):
 def switch_empresa(request, empresa_id):
     """Cambia la empresa activa en la sesión, validando permisos"""
     print(f"\n🔥 SWITCH_EMPRESA EJECUTADO")
-    print(f"   User: {request.user.username}")
-    print(f"   Empresa ID: {empresa_id}")
-    print(f"   Session antes: {dict(request.session)}")
+    print(f"  User: {request.user.username}")
+    print(f"  Empresa ID: {empresa_id}")
+    print(f"  Session antes: {dict(request.session)}")
     
     try:
         # Validar que el usuario tenga acceso a esta empresa
@@ -36,22 +40,23 @@ def switch_empresa(request, empresa_id):
         request.session['active_empresa_nombre'] = ue.empresa.nombre
         request.session.modified = True
         
-        print(f"   ✅ SESIÓN GUARDADA:")
-        print(f"      active_empresa_id: {ue.empresa.id}")
-        print(f"      active_empresa_nombre: {ue.empresa.nombre}")
-        print(f"   Session después: {dict(request.session)}")
+        print(f"  ✅ SESIÓN GUARDADA:")
+        print(f"    active_empresa_id: {ue.empresa.id}")
+        print(f"    active_empresa_nombre: {ue.empresa.nombre}")
+        print(f"  Session después: {dict(request.session)}")
         
         messages.success(request, f"Empresa cambiada a: {ue.empresa.nombre}")
     except UsuarioEmpresa.DoesNotExist:
-        print(f"   ❌ ERROR: Usuario no tiene acceso a empresa {empresa_id}")
+        print(f"  ❌ ERROR: Usuario no tiene acceso a empresa {empresa_id}")
         messages.error(request, "Acceso denegado a esta empresa.")
     
     next_url = request.META.get('HTTP_REFERER', 'dashboard')
-    print(f"   🔄 Redirigiendo a: {next_url}\n")
+    print(f"  🔄 Redirigiendo a: {next_url}\n")
     return redirect(next_url)
 
 @login_required
 @require_active_empresa
+@transaction.atomic # <--- MODIFICACIÓN 2: Transacción Atómica
 def upload_xml(request):
     """Vista para subir archivos XML CFDI"""
     # El decorador ya validó permisos e inyectó request.empresa
@@ -74,7 +79,7 @@ def upload_xml(request):
             procesadas = 0
             errores = 0
             errores_detalle = []
-            
+
             for file in files:
                 try:
                     factura, created = procesar_xml_cfdi(file, file.name, empresa)
@@ -100,7 +105,7 @@ def upload_xml(request):
                     # Guardar para resumen (máximo 5 para no saturar UI)
                     if len(errores_detalle) < 5:
                         errores_detalle.append(f"{file.name}: {str(e)[:100]}")
-            
+
             # Mensajes consolidados profesionales
             if procesadas > 0:
                 messages.success(request, f"✅ {procesadas} factura(s) procesada(s) correctamente para {empresa.nombre}.")
@@ -139,6 +144,7 @@ def detalle_factura(request, pk):
 
 @login_required
 @require_active_empresa
+@transaction.atomic # <--- MODIFICACIÓN 3: Transacción Atómica
 def carga_masiva_xml(request):
     """Vista para carga masiva de XMLs"""
     empresa = request.empresa
@@ -168,7 +174,7 @@ def carga_masiva_xml(request):
                     try:
                         from . import tasks as task_module
                         task_module.enqueue_contabilizar(factura.uuid, request.user.id)
-                        procesados += 1
+                        procesadas += 1
                     except Exception as e:
                         errores += 1
                         logger.error(f"Error encolando contabilización {file.name} (UUID={getattr(factura,'uuid',None)}): {e}")
@@ -453,7 +459,7 @@ class BandejaContabilizacionView(ListView):
     model = Factura
     template_name = 'core/bandeja_contabilizacion.html'
     context_object_name = 'facturas_pendientes'
-    paginate_by = 50
+    paginate_by = 100
 
     def get_queryset(self):
         active_id = self.request.session.get('active_empresa_id')
@@ -605,3 +611,79 @@ def validar_sat_lote(request):
     except Exception as e:
         logger.error(f"Error en validar_sat_lote: {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+@require_active_empresa
+def cumplimiento_sat(request):
+    """Render a simple SAT compliance dashboard with year/month selectors."""
+    empresa = request.empresa
+    year = int(request.GET.get('year', request.GET.get('y', datetime.date.today().year)))
+    month = int(request.GET.get('month', request.GET.get('m', datetime.date.today().month)))
+    return render(request, 'core/cumplimiento_sat.html', {
+        'empresa': empresa,
+        'year': year,
+        'month': month,
+    })
+
+
+@login_required
+@require_active_empresa
+def cumplimiento_sat_download(request):
+    """Download generated files. Expects GET params: year, month, doc (balanza/catalogo/polizas), fmt (xml/xlsx/pdf)"""
+    empresa = request.empresa
+    from django.utils.dateparse import parse_date
+    # Prefer explicit fecha_inicio/fecha_fin; fallback to year/month if not provided
+    fecha_inicio_str = request.GET.get('fecha_inicio')
+    fecha_fin_str = request.GET.get('fecha_fin')
+    if fecha_inicio_str and fecha_fin_str:
+        fecha_inicio = parse_date(fecha_inicio_str)
+        fecha_fin = parse_date(fecha_fin_str)
+    else:
+        year = int(request.GET.get('year', datetime.date.today().year))
+        month = int(request.GET.get('month', datetime.date.today().month))
+        # default to full month
+        import calendar
+        fecha_inicio = datetime.date(year, month, 1)
+        last_day = calendar.monthrange(year, month)[1]
+        fecha_fin = datetime.date(year, month, last_day)
+    doc = request.GET.get('doc')
+    fmt = request.GET.get('fmt')
+
+    if not doc or not fmt:
+        return HttpResponseBadRequest('doc and fmt are required')
+
+    try:
+        if doc == 'balanza':
+            if fmt == 'xml':
+                bio, filename, content_type = ExportService.generate_balanza_xml(empresa, fecha_inicio, fecha_fin)
+                # Validate XML before sending
+                try:
+                    valid, errors = ExportService.validate_balanza_xml(bio)
+                    if not valid:
+                        msg = 'XML validation failed: ' + '; '.join(errors[:10])
+                        logger.error(msg)
+                        return HttpResponseBadRequest(msg)
+                    # rewind bio for response
+                    bio.seek(0)
+                except Exception as e:
+                    logger.error(f'Error validating XML: {e}', exc_info=True)
+                    return HttpResponseBadRequest(f'Error validating XML: {e}')
+            elif fmt == 'xlsx':
+                bio, filename, content_type = ExportService.generate_balanza_excel(empresa, fecha_inicio, fecha_fin)
+            elif fmt == 'pdf':
+                bio, filename, content_type = ExportService.generate_balanza_pdf(empresa, fecha_inicio, fecha_fin)
+            else:
+                return HttpResponseBadRequest('fmt invalid')
+        elif doc == 'catalogo' and fmt == 'xml':
+            bio, filename, content_type = ExportService.generate_catalogo_xml(empresa, year, month)
+        elif doc == 'polizas' and fmt == 'xml':
+            bio, filename, content_type = ExportService.generate_polizas_xml(empresa, year, month)
+        else:
+            return HttpResponseBadRequest('Unsupported doc/fmt')
+
+        resp = FileResponse(bio, as_attachment=True, filename=filename, content_type=content_type)
+        return resp
+    except Exception as e:
+        logger.error(f"Error generating export {doc}.{fmt} for {empresa}: {e}", exc_info=True)
+        return HttpResponseBadRequest(str(e))

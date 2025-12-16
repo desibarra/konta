@@ -5,6 +5,7 @@ logger = logging.getLogger(__name__)
 from decimal import Decimal
 from django.core.files.base import ContentFile
 import uuid as uuid_lib
+from django.contrib import messages
 
 def _get_emisor(cfdi):
     """Obtiene el nodo Emisor intentando atributo o dict."""
@@ -133,6 +134,17 @@ def procesar_xml_cfdi(archivo_xml, archivo_nombre, empresa):
         
     if not uuid_str:
          raise ValueError("El Timbre Fiscal Digital no tiene UUID.")
+
+    # Validar si el UUID ya existe en la base de datos
+    uuid_str = cfdi.get('Complemento', {}).get('TimbreFiscalDigital', {}).get('UUID')
+    if not uuid_str:
+        raise ValueError("El XML no contiene UUID válido.")
+
+    factura_existente = Factura.objects.filter(uuid=uuid_str, empresa=empresa).exists()
+    # Si el XML ya fue procesado, retornar indicador de duplicado
+    if factura_existente:
+        logger.info(f"ℹ️ El XML con UUID {uuid_str} ya fue procesado previamente.")
+        return None, False
 
     # 3. Obtener Nodos Principales usando helpers
     emisor = _get_emisor(cfdi)

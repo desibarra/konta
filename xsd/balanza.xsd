@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+  <xs:element name="Balanza">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Ctas" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Cta" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:attribute name="NumCta" type="xs:string" use="optional"/>
+                  <xs:attribute name="Desc" type="xs:string" use="optional"/>
+                  <xs:attribute name="SaldoIni" type="xs:decimal" use="optional"/>
+                  <xs:attribute name="Debe" type="xs:decimal" use="optional"/>
+                  <xs:attribute name="Haber" type="xs:decimal" use="optional"/>
+                  <xs:attribute name="SaldoFin" type="xs:decimal" use="optional"/>
+                  <xs:attribute name="CodAgrup" type="xs:string" use="optional"/>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="Version" type="xs:string" use="optional"/>
+      <xs:attribute name="TipoEnvio" type="xs:string" use="optional"/>
+      <xs:attribute name="FechaModBal" type="xs:date" use="optional"/>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

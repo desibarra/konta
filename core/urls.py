@@ -33,4 +33,7 @@ urlpatterns = [
     path('reportes/balanza/', reporte_balanza, name='reporte_balanza'),
     path('reportes/estado-resultados/', reporte_estado_resultados, name='reporte_estado_resultados'),
     path('reportes/balance-general/', reporte_balance_general, name='reporte_balance_general'),
+    # SAT Cumplimiento
+    path('cumplimiento-sat/', views.cumplimiento_sat, name='cumplimiento_sat'),
+    path('cumplimiento-sat/download/', views.cumplimiento_sat_download, name='cumplimiento_sat_download'),
 ]
