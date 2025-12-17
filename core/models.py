@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 import uuid as uuid_lib
+from django.core.exceptions import ValidationError
 
 class Empresa(models.Model):
     REGIMENES_FISCALES = (
@@ -211,11 +212,16 @@ class Concepto(models.Model):
         return self.descripcion[:50]
 
 class Poliza(models.Model):
-    factura = models.OneToOneField(Factura, on_delete=models.CASCADE, related_name='poliza')
+    factura = models.OneToOneField(Factura, on_delete=models.CASCADE, related_name='poliza', null=True, blank=True)
     fecha = models.DateTimeField()
     descripcion = models.CharField(max_length=255)
     # Trazabilidad de Auditoría
     plantilla_usada = models.ForeignKey('PlantillaPoliza', on_delete=models.SET_NULL, null=True, blank=True, related_name='polizas_generadas', help_text="Plantilla utilizada para generar esta póliza")
+    
+    # Campos para edición manual
+    editada_manualmente = models.BooleanField(default=False, help_text="Indica si la póliza fue editada manualmente")
+    usuario_edicion = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='polizas_editadas', help_text="Usuario que editó la póliza")
+    fecha_edicion = models.DateTimeField(null=True, blank=True, help_text="Fecha de la última edición manual")
     
     @property
     def total_debe(self):
@@ -234,6 +240,16 @@ class MovimientoPoliza(models.Model):
     debe = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     haber = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     descripcion = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        indexes = [
+            # Composite index for balance sheet queries (cuenta + poliza for aggregations)
+            models.Index(fields=['cuenta', 'poliza']),
+            # Index for date-based filtering through poliza
+            models.Index(fields=['poliza']),
+        ]
+        verbose_name = "Movimiento de Póliza"
+        verbose_name_plural = "Movimientos de Pólizas"
 
     def __str__(self):
         return f"{self.cuenta.codigo} | D:{self.debe} H:{self.haber}"
@@ -256,6 +272,11 @@ class PlantillaPoliza(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.get_tipo_factura_display()})"
+    
+    def clean(self):
+        """Ensure all required accounts are mapped."""
+        if not self.cuenta_impuesto:
+            raise ValidationError("La cuenta de impuesto no está configurada en la plantilla.")
 
 
 class SatCodigo(models.Model):
@@ -293,3 +314,31 @@ class BackgroundTask(models.Model):
 
     def __str__(self):
         return f"Task {self.id} - {self.task_type} - {self.status}"
+
+
+class AuditoriaEliminacion(models.Model):
+    """
+    Registro de auditoría para eliminaciones de XMLs
+    Mantiene trazabilidad de qué se eliminó, quién y cuándo
+    """
+    uuid_factura = models.UUIDField(verbose_name="UUID del SAT")
+    folio = models.CharField(max_length=50, blank=True, null=True)
+    emisor_nombre = models.CharField(max_length=255, blank=True, null=True)
+    receptor_nombre = models.CharField(max_length=255, blank=True, null=True)
+    total = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    fecha_factura = models.DateField(null=True, blank=True)
+    
+    # Auditoría
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='eliminaciones')
+    fecha_eliminacion = models.DateTimeField(auto_now_add=True)
+    motivo = models.TextField(blank=True, null=True)
+    tenia_poliza = models.BooleanField(default=False)
+    
+    class Meta:
+        db_table = 'auditoria_eliminacion'
+        verbose_name = 'Auditoría de Eliminación'
+        verbose_name_plural = 'Auditorías de Eliminación'
+        ordering = ['-fecha_eliminacion']
+    
+    def __str__(self):
+        return f"Eliminación {self.uuid_factura} por {self.usuario} el {self.fecha_eliminacion}"

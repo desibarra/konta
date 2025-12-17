@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Crear Póliza Manual</h2>
+        <a href="{% url 'bandeja_contabilizacion' %}" class="btn btn-secondary">← Volver</a>
+    </div>
+
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> Las pólizas manuales se usan para registrar operaciones sin factura asociada
+        (ej: pagos de impuestos, comisiones bancarias, ajustes contables).
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Información General</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Empresa *</label>
+                    <select class="form-select" id="empresa-select" required>
+                        {% for emp in empresas %}
+                        <option value="{{ emp.id }}">{{ emp.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Fecha *</label>
+                    <input type="date" class="form-control" id="fecha-input" value="{{ today|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Descripción *</label>
+                    <input type="text" class="form-control" id="descripcion-input"
+                        placeholder="Ej: Pago de impuestos enero 2025" maxlength="255" required>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">Movimientos Contables</h5>
+        </div>
+        <div class="card-body">
+            <!-- Indicador de cuadre -->
+            <div id="cuadre-indicator" class="alert alert-secondary mb-3">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Total DEBE:</strong> <span id="total-debe">$0.00</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Total HABER:</strong> <span id="total-haber">$0.00</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Diferencia:</strong> <span id="diferencia">$0.00</span>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <span id="cuadre-badge" class="badge bg-secondary">Sin movimientos</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de movimientos -->
+            <div class="table-responsive">
+                <table class="table table-bordered" id="movimientos-table">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width: 40%">Cuenta</th>
+                            <th style="width: 20%">Debe</th>
+                            <th style="width: 20%">Haber</th>
+                            <th style="width: 15%">Descripción</th>
+                            <th style="width: 5%">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="movimientos-tbody">
+                        <!-- Los movimientos se agregarán dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="button" class="btn btn-success mb-3" id="agregar-movimiento">
+                <i class="bi bi-plus-circle"></i> Agregar Movimiento
+            </button>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'bandeja_contabilizacion' %}" class="btn btn-secondary">Cancelar</a>
+                <button type="button" class="btn btn-primary" id="crear-poliza" disabled>
+                    <i class="bi bi-save"></i> Crear Póliza
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template para nueva fila -->
+<template id="movimiento-template">
+    <tr class="movimiento-row">
+        <td>
+            <select class="form-select cuenta-select" required>
+                <option value="">Seleccionar cuenta...</option>
+            </select>
+        </td>
+        <td>
+            <input type="number" class="form-control debe-input" step="0.01" min="0" value="0.00" required>
+        </td>
+        <td>
+            <input type="number" class="form-control haber-input" step="0.01" min="0" value="0.00" required>
+        </td>
+        <td>
+            <input type="text" class="form-control descripcion-input" value="" maxlength="255">
+        </td>
+        <td>
+            <button type="button" class="btn btn-sm btn-danger eliminar-movimiento">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"
+    rel="stylesheet" />
+
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function () {
+        // Inicializar Select2 en selects de cuenta
+        function initSelect2(element) {
+            const empresaId = $('#empresa-select').val();
+
+            $(element).select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Buscar cuenta...',
+                allowClear: true,
+                ajax: {
+                    url: '{% url "obtener_cuentas_ajax" %}',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            search: params.term,
+                            empresa_id: empresaId
+                        };
+                    },
+                    processResults: function (data) {
+                        return {
+                            results: data.results
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 0
+            });
+        }
+
+        // Validar cuadre en tiempo real
+        function validarCuadre() {
+            const movimientos = [];
+
+            $('.movimiento-row').each(function () {
+                const debe = parseFloat($(this).find('.debe-input').val()) || 0;
+                const haber = parseFloat($(this).find('.haber-input').val()) || 0;
+
+                movimientos.push({ debe, haber });
+            });
+
+            if (movimientos.length === 0) {
+                $('#cuadre-badge').removeClass('bg-success bg-danger').addClass('bg-secondary').text('Sin movimientos');
+                $('#crear-poliza').prop('disabled', true);
+                return;
+            }
+
+            $.ajax({
+                url: '{% url "validar_cuadre_ajax" %}',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ movimientos }),
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                success: function (data) {
+                    $('#total-debe').text('$' + parseFloat(data.total_debe).toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+                    $('#total-haber').text('$' + parseFloat(data.total_haber).toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+                    $('#diferencia').text('$' + Math.abs(parseFloat(data.diferencia)).toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+
+                    if (data.cuadra) {
+                        $('#cuadre-indicator').removeClass('alert-danger').addClass('alert-success');
+                        $('#cuadre-badge').removeClass('bg-danger').addClass('bg-success').text('✓ Cuadra');
+                        $('#crear-poliza').prop('disabled', false);
+                    } else {
+                        $('#cuadre-indicator').removeClass('alert-success').addClass('alert-danger');
+                        $('#cuadre-badge').removeClass('bg-success').addClass('bg-danger').text('✗ No cuadra');
+                        $('#crear-poliza').prop('disabled', true);
+                    }
+                }
+            });
+        }
+
+        // Validar al cambiar valores
+        $(document).on('input', '.debe-input, .haber-input', function () {
+            validarCuadre();
+        });
+
+        // Agregar movimiento
+        $('#agregar-movimiento').click(function () {
+            const template = document.getElementById('movimiento-template');
+            const clone = template.content.cloneNode(true);
+            $('#movimientos-tbody').append(clone);
+
+            // Inicializar Select2 en el nuevo select
+            const newSelect = $('#movimientos-tbody tr:last .cuenta-select');
+            initSelect2(newSelect);
+
+            validarCuadre();
+        });
+
+        // Eliminar movimiento
+        $(document).on('click', '.eliminar-movimiento', function () {
+            $(this).closest('tr').remove();
+            validarCuadre();
+        });
+
+        // Crear póliza
+        $('#crear-poliza').click(function () {
+            const empresaId = $('#empresa-select').val();
+            const fecha = $('#fecha-input').val();
+            const descripcion = $('#descripcion-input').val();
+
+            if (!empresaId || !fecha || !descripcion) {
+                alert('Por favor complete todos los campos obligatorios');
+                return;
+            }
+
+            const movimientos = [];
+
+            $('.movimiento-row').each(function () {
+                const cuentaId = $(this).find('.cuenta-select').val();
+                const debe = $(this).find('.debe-input').val();
+                const haber = $(this).find('.haber-input').val();
+                const desc = $(this).find('.descripcion-input').val();
+
+                if (cuentaId) {
+                    movimientos.push({
+                        cuenta_id: cuentaId,
+                        debe: debe,
+                        haber: haber,
+                        descripcion: desc
+                    });
+                }
+            });
+
+            if (movimientos.length < 2) {
+                alert('Debe haber al menos 2 movimientos');
+                return;
+            }
+
+            $.ajax({
+                url: '{% url "crear_poliza_manual" %}',
+                method: 'POST',
+                data: {
+                    empresa_id: empresaId,
+                    fecha: fecha,
+                    descripcion: descripcion,
+                    movimientos_json: JSON.stringify(movimientos),
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                },
+                success: function (data) {
+                    if (data.success) {
+                        alert('Póliza creada exitosamente');
+                        window.location.href = '{% url "bandeja_contabilizacion" %}';
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                },
+                error: function () {
+                    alert('Error al crear la póliza');
+                }
+            });
+        });
+
+        // Agregar 2 movimientos iniciales
+        $('#agregar-movimiento').click();
+        $('#agregar-movimiento').click();
+    });
+</script>
+{% endblock %}

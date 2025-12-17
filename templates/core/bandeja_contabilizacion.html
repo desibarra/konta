@@ -112,9 +112,21 @@
                                 ${{ f.total|floatformat:2|intcomma }}
                             </td>
                             <td class="text-end">
+                                <!-- Eliminar XML -->
+                                <a href="{% url 'eliminar_factura' f.uuid %}" class="btn btn-sm btn-danger me-2"
+                                    title="Eliminar XML y póliza">
+                                    <i class="bi bi-trash-fill"></i>
+                                </a>
+
+                                <!-- Ver Detalle Contable -->
+                                <a href="{% url 'detalle_contable_xml' f.uuid %}"
+                                    class="btn btn-sm btn-outline-info me-2" title="Ver detalle contable">
+                                    <i class="bi bi-eye"></i> Detalle
+                                </a>
+
                                 <!-- Contabilización Individual (mantener funcionalidad existente) -->
                                 <form action="{% url 'contabilizar_factura' f.uuid %}" method="post"
-                                    class="d-flex justify-content-end align-items-center gap-2">
+                                    class="d-inline-flex justify-content-end align-items-center gap-2">
                                     {% csrf_token %}
                                     <select name="plantilla_id" class="form-select form-select-sm"
                                         style="max-width: 180px;" title="Seleccionar Plantilla Contable">
@@ -148,29 +160,29 @@
         <!-- CONTROLES DE PAGINACIÓN -->
         {% if is_paginated %}
         <nav>
-          <ul class="pagination justify-content-center">
-            {% if page_obj.has_previous %}
-              <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
-                  &laquo; Anterior
-                </a>
-              </li>
-            {% endif %}
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                        &laquo; Anterior
+                    </a>
+                </li>
+                {% endif %}
 
-            <li class="page-item disabled">
-              <span class="page-link">
-                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-              </span>
-            </li>
+                <li class="page-item disabled">
+                    <span class="page-link">
+                        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                    </span>
+                </li>
 
-            {% if page_obj.has_next %}
-              <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
-                  Siguiente &raquo;
-                </a>
-              </li>
-            {% endif %}
-          </ul>
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                        Siguiente &raquo;
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
         </nav>
         {% endif %}
     </div>
@@ -270,6 +282,32 @@
         } catch (e) {
             alert('Error en la validación SAT: ' + e.message);
             console.error(e);
+        }
+    }
+
+    // Procesar una factura individualmente
+    async function procesarFactura(uuid) {
+        const csrftoken = getCookie('csrftoken');
+
+        try {
+            const response = await fetch(`/contabilidad/contabilizar/${uuid}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error al procesar la factura: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            alert(`Factura procesada correctamente: ${result.message}`);
+            window.location.reload();
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+            console.error(error);
         }
     }
 </script>

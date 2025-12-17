@@ -1,0 +1,42 @@
+﻿CONTABILIZACION MASIVA
+================================================================================
+Total pendientes: 25
+Plantilla: Ingreso - Factura Emitida
+[1/25] c4523692... ERROR: AccountingService.contabilizar_factura() got an un
+[2/25] 0adcf547... ERROR: AccountingService.contabilizar_factura() got an un
+[3/25] 67c6268d... ERROR: AccountingService.contabilizar_factura() got an un
+[4/25] 54243e1c... ERROR: AccountingService.contabilizar_factura() got an un
+[5/25] 1dcb66ef... ERROR: AccountingService.contabilizar_factura() got an un
+[6/25] a148c774... ERROR: AccountingService.contabilizar_factura() got an un
+[7/25] 2263eb8d... ERROR: AccountingService.contabilizar_factura() got an un
+[8/25] c706ee60... ERROR: AccountingService.contabilizar_factura() got an un
+[9/25] 21bd974e... ERROR: AccountingService.contabilizar_factura() got an un
+[10/25] 6a7a2c92... ERROR: AccountingService.contabilizar_factura() got an un
+[11/25] 21437292... ERROR: AccountingService.contabilizar_factura() got an un
+[12/25] 0176187a... ERROR: AccountingService.contabilizar_factura() got an un
+[13/25] 4b0d6322... ERROR: AccountingService.contabilizar_factura() got an un
+[14/25] 673f1724... ERROR: AccountingService.contabilizar_factura() got an un
+[15/25] 620d2767... ERROR: AccountingService.contabilizar_factura() got an un
+[16/25] 8108781b... ERROR: AccountingService.contabilizar_factura() got an un
+[17/25] 6a77e703... ERROR: AccountingService.contabilizar_factura() got an un
+[18/25] 644cab26... ERROR: AccountingService.contabilizar_factura() got an un
+[19/25] a52dcd51... ERROR: AccountingService.contabilizar_factura() got an un
+[20/25] 9223a09b... ERROR: AccountingService.contabilizar_factura() got an un
+[21/25] 1e5793b1... ERROR: AccountingService.contabilizar_factura() got an un
+[22/25] 9bef171f... ERROR: AccountingService.contabilizar_factura() got an un
+[23/25] 3be83483... ERROR: AccountingService.contabilizar_factura() got an un
+[24/25] ad00cf23... ERROR: AccountingService.contabilizar_factura() got an un
+[25/25] 8d4b50e1... ERROR: AccountingService.contabilizar_factura() got an un
+
+================================================================================
+RESUMEN:
+  Exitosas: 0
+  Fallidas: 25
+
+Primeros errores:
+  c4523692: AccountingService.contabilizar_factura() got an unexpected keyword argument 'fac
+  0adcf547: AccountingService.contabilizar_factura() got an unexpected keyword argument 'fac
+  67c6268d: AccountingService.contabilizar_factura() got an unexpected keyword argument 'fac
+  54243e1c: AccountingService.contabilizar_factura() got an unexpected keyword argument 'fac
+  1dcb66ef: AccountingService.contabilizar_factura() got an unexpected keyword argument 'fac
+================================================================================

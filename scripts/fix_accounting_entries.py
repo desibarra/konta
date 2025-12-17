@@ -18,20 +18,26 @@ def run_diagnosis(fix=False):
     # Identify invoices: Naturaleza 'E' AND Linked to Poliza with Account 4xx (Ingresos)
     # Note: 4xx accounts are typically Ingresos by default in this system (e.g. 401 Ventas)
     
+    # Step 1: Filter invoices with associated policies
     candidates = Factura.objects.filter(
         naturaleza='E',
-        poliza__isnull=False,
-        poliza__movimientos__cuenta__codigo__startswith='4'
+        poliza__isnull=False
     ).distinct()
-    
-    count = candidates.count()
+
+    # Step 2: Validate movements for each candidate
+    valid_candidates = []
+    for factura in candidates:
+        if factura.poliza.movimientopoliza_set.filter(cuenta__codigo__startswith='4').exists():
+            valid_candidates.append(factura)
+            
+    count = len(valid_candidates)
     print(f"Candidates found: {count}")
     
     if count == 0:
         print("✅ No issues found.")
         return
 
-    for fact in candidates:
+    for fact in valid_candidates:
         poliza = fact.poliza
         print(f"\n[!] Invoice {fact.uuid} | Naturaleza: {fact.naturaleza} | Poliza: {poliza.id}")
         

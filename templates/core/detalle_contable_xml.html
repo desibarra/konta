@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Detalle Contable del XML</h2>
+        <a href="{% url 'bandeja_contabilizacion' %}" class="btn btn-secondary">â Volver</a>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Información de la Factura</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>UUID:</strong> <code>{{ factura.uuid }}</code></p>
+                    <p><strong>Folio:</strong> {{ factura.folio }}</p>
+                    <p><strong>Fecha:</strong> {{ factura.fecha }}</p>
+                    <p><strong>Tipo:</strong> {{ factura.tipo_comprobante }}</p>
+                    <p><strong>Naturaleza:</strong>
+                        {% if factura.naturaleza == 'I' %}
+                        <span class="badge bg-success">Ingreso</span>
+                        {% else %}
+                        <span class="badge bg-danger">Egreso</span>
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Emisor:</strong> {{ factura.emisor_nombre }}</p>
+                    <p><strong>RFC Emisor:</strong> {{ factura.emisor_rfc }}</p>
+                    <p><strong>Receptor:</strong> {{ factura.receptor_nombre }}</p>
+                    <p><strong>RFC Receptor:</strong> {{ factura.receptor_rfc }}</p>
+                    <p><strong>Estado:</strong>
+                        {% if factura.estado_contable == 'CONTABILIZADA' %}
+                        <span class="badge bg-success">Contabilizada</span>
+                        {% else %}
+                        <span class="badge bg-warning">{{ factura.estado_contable }}</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            <hr>
+            <div class="row">
+                <div class="col-md-3">
+                    <p><strong>Subtotal:</strong> ${{ factura.subtotal|floatformat:2|intcomma }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>IVA Trasladado:</strong> ${{ factura.total_impuestos_trasladados|floatformat:2|intcomma }}</p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>IVA Retenido:</strong> ${{ factura.total_impuestos_retenidos|floatformat:2|intcomma }}
+                    </p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>TOTAL:</strong> <strong class="text-primary">${{ factura.total|floatformat:2|intcomma }}</strong></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if poliza %}
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">Póliza Contable #{{ poliza.id }}</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>Fecha:</strong> {{ poliza.fecha }}</p>
+            <p><strong>Descripción:</strong> {{ poliza.descripcion }}</p>
+
+            <h6 class="mt-4 mb-3">Movimientos Contables:</h6>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Cuenta</th>
+                            <th>Nombre</th>
+                            <th class="text-end">Debe</th>
+                            <th class="text-end">Haber</th>
+                            <th>Descripción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimientos %}
+                        <tr {% if mov.cuenta.codigo == '702-99' %}class="table-warning" {% endif %}>
+                            <td><code>{{ mov.cuenta.codigo }}</code></td>
+                            <td>{{ mov.cuenta.nombre }}</td>
+                            <td class="text-end">
+                                {% if mov.debe > 0 %}
+                                ${{ mov.debe|floatformat:2|intcomma }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if mov.haber > 0 %}
+                                ${{ mov.haber|floatformat:2|intcomma }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>{{ mov.descripcion }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="2" class="text-end">TOTALES:</td>
+                            <td class="text-end {% if total_debe != total_haber %}text-danger{% endif %}">
+                                ${{ total_debe|floatformat:2|intcomma }}
+                            </td>
+                            <td class="text-end {% if total_debe != total_haber %}text-danger{% endif %}">
+                                ${{ total_haber|floatformat:2|intcomma }}
+                            </td>
+                            <td></td>
+                        </tr>
+                        {% if total_debe != total_haber %}
+                        <tr class="table-danger">
+                            <td colspan="2" class="text-end">DIFERENCIA:</td>
+                            <td colspan="2" class="text-end">
+                                ${{ diferencia|floatformat:2|intcomma }}
+                            </td>
+                            <td>â ï¸ La póliza no cuadra</td>
+                        </tr>
+                        {% else %}
+                        <tr class="table-success">
+                            <td colspan="5" class="text-center">
+                                â La póliza cuadra correctamente (Debe = Haber)
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="mt-4">
+                <a href="{% url 'editar_poliza' poliza.id %}" class="btn btn-warning me-2">
+                    <i class="bi bi-pencil-fill"></i> Editar Póliza
+                </a>
+                <a href="{% url 'eliminar_factura' factura.uuid %}" class="btn btn-danger me-2">
+                    <i class="bi bi-trash-fill"></i> Eliminar XML
+                </a>
+                <a href="{% url 'descontabilizar_factura' factura.uuid %}" class="btn btn-warning"
+                    onclick="return confirm('¿Está seguro de descontabilizar esta factura? Se eliminará la póliza.')">
+                    ð Descontabilizar
+                </a>
+                <a href="{% url 'contabilizar_factura' factura.uuid %}" class="btn btn-primary"
+                    onclick="return confirm('¿Regenerar la póliza contable?')">
+                    â»ï¸ Regenerar Póliza
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        <h5>â ï¸ Esta factura no ha sido contabilizada</h5>
+        <p>No existe una póliza contable asociada a este XML.</p>
+        <a href="{% url 'contabilizar_factura' factura.uuid %}" class="btn btn-primary">
+            Contabilizar Ahora
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -8,6 +8,8 @@ from core.services.contabilidad_engine import ContabilidadEngine
 from .decorators import require_active_empresa
 from decimal import Decimal
 from core.models import CuentaContable, MovimientoPoliza
+from django.http import HttpResponse
+from django.db.models import Sum
 
 @login_required
 @require_active_empresa
@@ -148,7 +150,6 @@ def reporte_estado_resultados(request):
             saldo = (total_debe or Decimal('0')) - (total_haber or Decimal('0'))
         return saldo
 
-    from django.db.models import Sum
     ingresos = []
     total_ingresos = Decimal('0')
     for c in ingresos_qs:
@@ -203,30 +204,20 @@ def reporte_balance_general(request):
             'cuadra': False, 'diferencia': 0
         }
 
-    # VERIFICACIÓN: calcular la Utilidad acumulada del ejercicio usando la misma
-    # lógica que el Estado de Resultados. Si el usuario solicita "al 31-Dic",
-    # usamos desde 1-Ene del mismo año hasta la fecha de corte.
-    anio = fecha_corte.year
-    fecha_inicio_ejercicio = date(anio, 1, 1)
-    calc = ReportesEngine.calcular_utilidad_neta(empresa, fecha_inicio_ejercicio, fecha_corte)
-
-    # Calcular totales numéricos a partir de las estructuras devueltas por el motor
+    # Usar los valores calculados por el motor (NO recalcular)
+    total_activo = balance.get('total_activo', 0)
+    total_pasivo = balance.get('total_pasivo', 0)
+    total_capital = balance.get('total_capital', 0)
+    utilidad_ejercicio = balance.get('utilidad_ejercicio', 0)
+    diferencia = balance.get('diferencia', 0)
+    cuadra = balance.get('cuadra', False)
+    
+    # Capital contribuido
     capital_list = balance.get('capital_contribuido') or []
     try:
         total_capital_contribuido = sum((getattr(c, 'saldo', c) for c in capital_list), 0)
     except Exception:
-        total_capital_contribuido = balance.get('total_capital', balance.get('capital_contribuido', 0)) or 0
-
-    total_activo = balance.get('total_activo', 0)
-    total_pasivo = balance.get('total_pasivo', 0)
-
-    utilidad_ejercicio = calc.get('utilidad_neta', balance.get('utilidad_ejercicio', 0))
-
-    total_capital = total_capital_contribuido + utilidad_ejercicio
-
-    suma_pasivo_capital = total_pasivo + total_capital
-    diferencia = total_activo - suma_pasivo_capital
-    cuadra = abs(diferencia) < 0.1
+        total_capital_contribuido = total_capital - utilidad_ejercicio
 
     context = {
         'empresa': empresa,
@@ -245,3 +236,43 @@ def reporte_balance_general(request):
         'diferencia': diferencia
     }
     return render(request, 'reportes/balance_general.html', context)
+
+@login_required
+@require_active_empresa
+def reporte_auxiliares(request):
+    """Vista para generar el reporte de auxiliares"""
+    empresa = request.empresa
+
+    cuenta_id = request.GET.get('cuenta_id')
+    fecha_inicio_str = request.GET.get('fecha_inicio')
+    fecha_fin_str = request.GET.get('fecha_fin')
+
+    if not cuenta_id or not fecha_inicio_str or not fecha_fin_str:
+        # Mostrar formulario de filtros si no se envían parámetros
+        cuentas = CuentaContable.objects.filter(empresa=empresa)
+        return render(request, 'core/reporte_auxiliares_form.html', {'cuentas': cuentas})
+
+    fecha_inicio = parse_date(fecha_inicio_str)
+    fecha_fin = parse_date(fecha_fin_str)
+
+    try:
+        cuenta = CuentaContable.objects.get(id=cuenta_id, empresa=empresa)
+    except CuentaContable.DoesNotExist:
+        return HttpResponse("Cuenta no encontrada o no pertenece a la empresa activa.", status=404)
+
+    movimientos = MovimientoPoliza.objects.filter(
+        cuenta=cuenta,
+        poliza__fecha__range=[fecha_inicio, fecha_fin]
+    ).select_related('poliza', 'poliza__factura').order_by('poliza__fecha', 'id')
+
+    saldo_acumulado = 0
+    for movimiento in movimientos:
+        saldo_acumulado += movimiento.debe - movimiento.haber
+        movimiento.saldo_acumulado = saldo_acumulado
+
+    return render(request, 'core/reporte_auxiliares.html', {
+        'cuenta': cuenta,
+        'movimientos': movimientos,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': fecha_fin,
+    })

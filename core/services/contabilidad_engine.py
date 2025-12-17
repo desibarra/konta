@@ -30,14 +30,16 @@ class ContabilidadEngine:
             return queryset.annotate(
                 m_debe=Coalesce(Sum('movimientopoliza__debe', filter=filtro_periodo), Value(0, output_field=DecimalField())),
                 m_haber=Coalesce(Sum('movimientopoliza__haber', filter=filtro_periodo), Value(0, output_field=DecimalField()))
-            ).annotate(saldo=expr).filter(saldo__gt=0)
+            ).annotate(saldo=expr).exclude(saldo=0)
 
         # 1. Ingresos (Tipo: INGRESO, Nat: A)
-        ingresos_qs = CuentaContable.objects.filter(empresa=empresa, tipo='INGRESO')
+        # Excluir cuenta 702-99 (ajustes técnicos, no cuenta real de negocio)
+        ingresos_qs = CuentaContable.objects.filter(empresa=empresa, tipo='INGRESO').exclude(codigo='702-99')
         ingresos = list(annotate_saldo(ingresos_qs, 'A'))
 
         # 2. Egresos (Tipo: COSTO o GASTO, Nat: D)
-        egresos_qs = CuentaContable.objects.filter(empresa=empresa, tipo__in=['COSTO', 'GASTO'])
+        # Excluir cuenta 702-99 (ajustes técnicos, no cuenta real de negocio)
+        egresos_qs = CuentaContable.objects.filter(empresa=empresa, tipo__in=['COSTO', 'GASTO']).exclude(codigo='702-99')
         egresos = list(annotate_saldo(egresos_qs, 'D'))
 
         # 3. Totales
@@ -92,7 +94,7 @@ class ContabilidadEngine:
             return queryset.annotate(
                 s_debe=Coalesce(Sum('movimientopoliza__debe', filter=filtro_acumulado), Value(0, output_field=DecimalField())),
                 s_haber=Coalesce(Sum('movimientopoliza__haber', filter=filtro_acumulado), Value(0, output_field=DecimalField()))
-            ).annotate(saldo=expr).filter(saldo__gt=0)
+            ).annotate(saldo=expr).exclude(saldo=0)
 
         # 1. Activos
         activos = list(annotate_saldo_acum(

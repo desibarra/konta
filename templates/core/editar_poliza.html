@@ -1,0 +1,308 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Editar Póliza #{{ poliza.id }}</h2>
+        <a href="{% if poliza.factura %}{% url 'detalle_contable_xml' poliza.factura.uuid %}{% else %}#{% endif %}"
+            class="btn btn-secondary">← Volver</a>
+    </div>
+
+    {% if poliza.editada_manualmente %}
+    <div class="alert alert-info">
+        <i class="bi bi-pencil-fill"></i> Esta póliza fue editada manualmente
+        {% if poliza.usuario_edicion %}por <strong>{{ poliza.usuario_edicion.username }}</strong>{% endif %}
+        {% if poliza.fecha_edicion %}el {{ poliza.fecha_edicion|date:"d/m/Y H:i" }}{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Información de la Póliza</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <p><strong>Fecha:</strong> {{ poliza.fecha|date:"d/m/Y" }}</p>
+                </div>
+                <div class="col-md-8">
+                    <p><strong>Descripción:</strong> {{ poliza.descripcion }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-warning">
+            <h5 class="mb-0">Movimientos Contables</h5>
+        </div>
+        <div class="card-body">
+            <!-- Indicador de cuadre -->
+            <div id="cuadre-indicator" class="alert alert-secondary mb-3">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>Total DEBE:</strong> <span id="total-debe">$0.00</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Total HABER:</strong> <span id="total-haber">$0.00</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>Diferencia:</strong> <span id="diferencia">$0.00</span>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <span id="cuadre-badge" class="badge bg-secondary">Calculando...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de movimientos -->
+            <div class="table-responsive">
+                <table class="table table-bordered" id="movimientos-table">
+                    <thead class="table-dark">
+                        <tr>
+                            <th style="width: 40%">Cuenta</th>
+                            <th style="width: 20%">Debe</th>
+                            <th style="width: 20%">Haber</th>
+                            <th style="width: 15%">Descripción</th>
+                            <th style="width: 5%">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="movimientos-tbody">
+                        {% for mov in movimientos %}
+                        <tr class="movimiento-row">
+                            <td>
+                                <select class="form-select cuenta-select" data-cuenta-id="{{ mov.cuenta.id }}" required>
+                                    <option value="{{ mov.cuenta.id }}" selected>{{ mov.cuenta.codigo }} - {{
+                                        mov.cuenta.nombre }}</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="number" class="form-control debe-input" step="0.01" min="0"
+                                    value="{{ mov.debe }}" required>
+                            </td>
+                            <td>
+                                <input type="number" class="form-control haber-input" step="0.01" min="0"
+                                    value="{{ mov.haber }}" required>
+                            </td>
+                            <td>
+                                <input type="text" class="form-control descripcion-input" value="{{ mov.descripcion }}"
+                                    maxlength="255">
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-danger eliminar-movimiento">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="button" class="btn btn-success mb-3" id="agregar-movimiento">
+                <i class="bi bi-plus-circle"></i> Agregar Movimiento
+            </button>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% if poliza.factura %}{% url 'detalle_contable_xml' poliza.factura.uuid %}{% else %}#{% endif %}"
+                    class="btn btn-secondary">Cancelar</a>
+                <button type="button" class="btn btn-primary" id="guardar-poliza" disabled>
+                    <i class="bi bi-save"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template para nueva fila -->
+<template id="movimiento-template">
+    <tr class="movimiento-row">
+        <td>
+            <select class="form-select cuenta-select" required>
+                <option value="">Seleccionar cuenta...</option>
+            </select>
+        </td>
+        <td>
+            <input type="number" class="form-control debe-input" step="0.01" min="0" value="0.00" required>
+        </td>
+        <td>
+            <input type="number" class="form-control haber-input" step="0.01" min="0" value="0.00" required>
+        </td>
+        <td>
+            <input type="text" class="form-control descripcion-input" value="" maxlength="255">
+        </td>
+        <td>
+            <button type="button" class="btn btn-sm btn-danger eliminar-movimiento">
+                <i class="bi bi-trash"></i>
+            </button>
+        </td>
+    </tr>
+</template>
+
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css"
+    rel="stylesheet" />
+
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function () {
+        const empresaId = {{ empresa.id }
+    };
+    const polizaId = {{ poliza.id }};
+
+    // Inicializar Select2 en selects existentes
+    function initSelect2(element) {
+        $(element).select2({
+            theme: 'bootstrap-5',
+            placeholder: 'Buscar cuenta...',
+            allowClear: true,
+            ajax: {
+                url: '{% url "obtener_cuentas_ajax" %}',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return {
+                        search: params.term,
+                        empresa_id: empresaId
+                    };
+                },
+                processResults: function (data) {
+                    return {
+                        results: data.results
+                    };
+                },
+                cache: true
+            },
+            minimumInputLength: 0
+        });
+    }
+
+    // Inicializar todos los selects existentes
+    $('.cuenta-select').each(function () {
+        initSelect2(this);
+    });
+
+    // Validar cuadre en tiempo real
+    function validarCuadre() {
+        const movimientos = [];
+
+        $('.movimiento-row').each(function () {
+            const debe = parseFloat($(this).find('.debe-input').val()) || 0;
+            const haber = parseFloat($(this).find('.haber-input').val()) || 0;
+
+            movimientos.push({ debe, haber });
+        });
+
+        $.ajax({
+            url: '{% url "validar_cuadre_ajax" %}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ movimientos }),
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            success: function (data) {
+                $('#total-debe').text('$' + parseFloat(data.total_debe).toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+                $('#total-haber').text('$' + parseFloat(data.total_haber).toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+                $('#diferencia').text('$' + Math.abs(parseFloat(data.diferencia)).toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+
+                if (data.cuadra) {
+                    $('#cuadre-indicator').removeClass('alert-danger').addClass('alert-success');
+                    $('#cuadre-badge').removeClass('bg-danger').addClass('bg-success').text('✓ Cuadra');
+                    $('#guardar-poliza').prop('disabled', false);
+                } else {
+                    $('#cuadre-indicator').removeClass('alert-success').addClass('alert-danger');
+                    $('#cuadre-badge').removeClass('bg-success').addClass('bg-danger').text('✗ No cuadra');
+                    $('#guardar-poliza').prop('disabled', true);
+                }
+            }
+        });
+    }
+
+    // Validar al cambiar valores
+    $(document).on('input', '.debe-input, .haber-input', function () {
+        validarCuadre();
+    });
+
+    // Agregar movimiento
+    $('#agregar-movimiento').click(function () {
+        const template = document.getElementById('movimiento-template');
+        const clone = template.content.cloneNode(true);
+        $('#movimientos-tbody').append(clone);
+
+        // Inicializar Select2 en el nuevo select
+        const newSelect = $('#movimientos-tbody tr:last .cuenta-select');
+        initSelect2(newSelect);
+
+        validarCuadre();
+    });
+
+    // Eliminar movimiento
+    $(document).on('click', '.eliminar-movimiento', function () {
+        if ($('.movimiento-row').length > 2) {
+            $(this).closest('tr').remove();
+            validarCuadre();
+        } else {
+            alert('Debe haber al menos 2 movimientos en la póliza');
+        }
+    });
+
+    // Guardar póliza
+    $('#guardar-poliza').click(function () {
+        const movimientos = [];
+
+        $('.movimiento-row').each(function () {
+            const cuentaId = $(this).find('.cuenta-select').val();
+            const debe = $(this).find('.debe-input').val();
+            const haber = $(this).find('.haber-input').val();
+            const descripcion = $(this).find('.descripcion-input').val();
+
+            if (cuentaId) {
+                movimientos.push({
+                    cuenta_id: cuentaId,
+                    debe: debe,
+                    haber: haber,
+                    descripcion: descripcion
+                });
+            }
+        });
+
+        if (movimientos.length < 2) {
+            alert('Debe haber al menos 2 movimientos');
+            return;
+        }
+
+        $.ajax({
+            url: window.location.href,
+            method: 'POST',
+            data: {
+                movimientos_json: JSON.stringify(movimientos),
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            },
+            success: function (data) {
+                if (data.success) {
+                    alert('Póliza guardada exitosamente');
+                    {% if poliza.factura %}
+                    window.location.href = '{% url "detalle_contable_xml" poliza.factura.uuid %}';
+                    {% else %}
+                    window.location.reload();
+                    {% endif %}
+                } else {
+            alert('Error: ' + data.error);
+                }
+            },
+    error: function() {
+        alert('Error al guardar la póliza');
+    }
+        });
+    });
+
+    // Validar cuadre inicial
+    validarCuadre();
+});
+</script>
+{% endblock %}

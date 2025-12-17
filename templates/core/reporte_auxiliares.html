@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Reporte de Auxiliares</h1>
+<h2>Cuenta: {{ cuenta.codigo }} - {{ cuenta.nombre }}</h2>
+<p>Período: {{ fecha_inicio }} a {{ fecha_fin }}</p>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Fecha</th>
+            <th>Póliza</th>
+            <th>UUID (XML)</th>
+            <th>Concepto</th>
+            <th>Debe</th>
+            <th>Haber</th>
+            <th>Saldo Acumulado</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for movimiento in movimientos %}
+        <tr>
+            <td>{{ movimiento.poliza.fecha }}</td>
+            <td>{{ movimiento.poliza.id }}</td>
+            <td>
+                {% if movimiento.poliza.factura %}
+                <small>{{ movimiento.poliza.factura.uuid }}</small>
+                {% else %}
+                -
+                {% endif %}
+            </td>
+            <td>{{ movimiento.descripcion }}</td>
+            <td>{{ movimiento.debe }}</td>
+            <td>{{ movimiento.haber }}</td>
+            <td>{{ movimiento.saldo_acumulado }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

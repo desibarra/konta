@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Reporte de Auxiliares</h1>
+<form method="get" action="">
+    <div class="form-group">
+        <label for="cuenta_id">Cuenta Contable:</label>
+        <select name="cuenta_id" id="cuenta_id" class="form-control">
+            {% for cuenta in cuentas %}
+            <option value="{{ cuenta.id }}">{{ cuenta.codigo }} - {{ cuenta.nombre }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="fecha_inicio">Fecha Inicio:</label>
+        <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control">
+    </div>
+    <div class="form-group">
+        <label for="fecha_fin">Fecha Fin:</label>
+        <input type="date" name="fecha_fin" id="fecha_fin" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary">Generar Reporte</button>
+</form>
+{% endblock %}

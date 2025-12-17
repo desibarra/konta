@@ -1,0 +1,28 @@
+﻿Analizando facturas pendientes...
+================================================================================
+Total facturas de egreso pendientes: 120
+
+Factura: 2263eb8d-f388-44f6-8cca-fff89d37e3fa
+  Emisor: FRIENDLY HOLA VALLARTA
+  Subtotal: $9,642.86
+  Diferencia: $308.58
+  Porcentaje: 3.20%
+  Accion: Agregar $308.58 a retenciones
+
+================================================================================
+RESUMEN:
+  Facturas actualizadas: 1
+  Facturas con problemas: 18
+
+Facturas que requieren revisi¾n manual:
+  - 0adcf547-760d-53fc-842c-785d8ca830af: INMOBILIARIA CUMA LAREDO (Dif: $78.00, 6.00%)
+  - 1dcb66ef-b0ce-5273-a5b5-9c1ec148d974: INMOBILIARIA CUMA LAREDO (Dif: $234.00, 6.00%)
+  - 1e5793b1-8fa7-5125-916c-d86e0b8fc053: INMOBILIARIA CUMA LAREDO (Dif: $78.00, 6.00%)
+  - 3be83483-d20f-4be6-9c3b-3e012c883a9a: FIDEICOMISO F/1596 (Dif: $98.13, 4.00%)
+  - 6a7a2c92-93d8-5cb6-a526-b61163574b67: INMOBILIARIA CUMA LAREDO (Dif: $234.00, 6.00%)
+
+Creando cuenta para retenciones estatales...
+Cuenta ya existe: 213-03 - Retenciones Estatales por Pagar
+
+Proceso completado!
+Ahora puedes intentar contabilizar las facturas desde la bandeja.

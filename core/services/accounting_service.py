@@ -7,6 +7,7 @@ import logging
 import os
 import xml.etree.ElementTree as ET
 from django.conf import settings
+import decimal  # Importa todo el módulo
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class AccountingService:
         total_isr_retenido = Decimal('0.00')
         total_iva_retenido = Decimal('0.00')
         total_descuento = Decimal('0.00')
+        total_impuestos_locales = Decimal('0.00')  # NUEVO: Impuestos estatales/locales
 
         # Buscar archivo que contenga el UUID en el nombre
         if os.path.isdir(xml_dir):
@@ -68,13 +70,24 @@ class AccountingService:
                                             for t in tras:
                                                 impuesto = t.attrib.get('Impuesto') or t.attrib.get('impuesto')
                                                 importe = t.attrib.get('Importe') or t.attrib.get('importe')
-                                                if impuesto == '002' and importe:
-                                                    total_iva_trasladado += Decimal(importe)
+                                                try:
+                                                    importe = Decimal(importe)
+                                                except (ValueError, TypeError, ET.ParseError):
+                                                    logger.warning(f"Valor inválido para importe: {importe}")
+                                                    continue
+
+                                                if impuesto == '002':
+                                                    total_iva_trasladado += importe
                                         else:
                                             impuesto = tras.attrib.get('Impuesto') or tras.attrib.get('impuesto')
                                             importe = tras.attrib.get('Importe') or tras.attrib.get('importe')
-                                            if impuesto == '002' and importe:
-                                                total_iva_trasladado += Decimal(importe)
+                                            try:
+                                                importe = Decimal(importe)
+                                            except (ValueError, TypeError, ET.ParseError):
+                                                logger.warning(f"Valor inválido para importe: {importe}")
+                                                continue
+                                            if impuesto == '002':
+                                                total_iva_trasladado += importe
 
                                 # Retenciones
                                 for ret in impuestos.findall('.//'):
@@ -84,6 +97,12 @@ class AccountingService:
                                             for r in ret:
                                                 impuesto = r.attrib.get('Impuesto') or r.attrib.get('impuesto')
                                                 importe = r.attrib.get('Importe') or r.attrib.get('importe')
+                                                try:
+                                                    importe = Decimal(importe)
+                                                except (ValueError, TypeError, ET.ParseError):
+                                                    logger.warning(f"Valor inválido para importe: {importe}")
+                                                    continue
+
                                                 if impuesto == '001' and importe:
                                                     total_isr_retenido += Decimal(importe)
                                                 if impuesto == '002' and importe:
@@ -91,10 +110,48 @@ class AccountingService:
                                         else:
                                             impuesto = ret.attrib.get('Impuesto') or ret.attrib.get('impuesto')
                                             importe = ret.attrib.get('Importe') or ret.attrib.get('importe')
+                                            try:
+                                                importe = Decimal(importe)
+                                            except (ValueError, TypeError, ET.ParseError):
+                                                logger.warning(f"Valor inválido para importe: {importe}")
+                                                continue
                                             if impuesto == '001' and importe:
                                                 total_isr_retenido += Decimal(importe)
                                             if impuesto == '002' and importe:
                                                 total_iva_retenido += Decimal(importe)
+                        
+                        # NUEVO: Buscar Complemento de Impuestos Locales (namespace SAT)
+                        # Namespace: http://www.sat.gob.mx/implocal
+                        # Buscar en todo el árbol cualquier nodo que contenga "implocal" en su namespace
+                        for elem in root.iter():
+                            # Verificar si el elemento pertenece al namespace de impuestos locales
+                            if 'implocal' in elem.tag.lower() or 'impuestoslocales' in tag_without_ns(elem.tag).lower():
+                                # Buscar RetencionesLocales
+                                for child in elem.iter():
+                                    child_tag = tag_without_ns(child.tag).lower()
+                                    
+                                    if 'retencionlocal' in child_tag:
+                                        # Extraer importe de retención local
+                                        importe_local = child.attrib.get('Importe') or child.attrib.get('importe')
+                                        if importe_local:
+                                            try:
+                                                importe_local = Decimal(importe_local)
+                                                total_impuestos_locales += importe_local
+                                                logger.info(f"Impuesto local retenido encontrado: ${importe_local:.2f}")
+                                            except (ValueError, TypeError):
+                                                continue
+                                    
+                                    elif 'trasladolocal' in child_tag:
+                                        # También considerar traslados locales si existen
+                                        importe_local = child.attrib.get('Importe') or child.attrib.get('importe')
+                                        if importe_local:
+                                            try:
+                                                importe_local = Decimal(importe_local)
+                                                # Los traslados locales se suman a los traslados totales
+                                                total_iva_trasladado += importe_local
+                                                logger.info(f"Impuesto local trasladado encontrado: ${importe_local:.2f}")
+                                            except (ValueError, TypeError):
+                                                continue
 
                         # Buscar en conceptos: impuestos por concepto
                         for concepto in root.findall('.//'):
@@ -106,11 +163,22 @@ class AccountingService:
                                             for t in c:
                                                 impuesto = t.attrib.get('Impuesto') or t.attrib.get('impuesto')
                                                 importe = t.attrib.get('Importe') or t.attrib.get('importe')
+                                                try:
+                                                    importe = Decimal(importe)
+                                                except (ValueError, TypeError, ET.ParseError):
+                                                    logger.warning(f"Valor inválido para importe: {importe}")
+                                                    continue
+
                                                 if impuesto == '002' and importe:
                                                     total_iva_trasladado += Decimal(importe)
                                         else:
                                             impuesto = c.attrib.get('Impuesto') or c.attrib.get('impuesto')
                                             importe = c.attrib.get('Importe') or c.attrib.get('importe')
+                                            try:
+                                                importe = Decimal(importe)
+                                            except (ValueError, TypeError, ET.ParseError):
+                                                logger.warning(f"Valor inválido para importe: {importe}")
+                                                continue
                                             if impuesto == '002' and importe:
                                                 total_iva_trasladado += Decimal(importe)
                                     if tagc == 'retencion' or tagc == 'retenciones':
@@ -118,6 +186,12 @@ class AccountingService:
                                             for r in c:
                                                 impuesto = r.attrib.get('Impuesto') or r.attrib.get('impuesto')
                                                 importe = r.attrib.get('Importe') or r.attrib.get('importe')
+                                                try:
+                                                    importe = Decimal(importe)
+                                                except (ValueError, TypeError, ET.ParseError):
+                                                    logger.warning(f"Valor inválido para importe: {importe}")
+                                                    continue
+
                                                 if impuesto == '001' and importe:
                                                     total_isr_retenido += Decimal(importe)
                                                 if impuesto == '002' and importe:
@@ -125,6 +199,11 @@ class AccountingService:
                                         else:
                                             impuesto = c.attrib.get('Impuesto') or c.attrib.get('impuesto')
                                             importe = c.attrib.get('Importe') or c.attrib.get('importe')
+                                            try:
+                                                importe = Decimal(importe)
+                                            except (ValueError, TypeError, ET.ParseError):
+                                                logger.warning(f"Valor inválido para importe: {importe}")
+                                                continue
                                             if impuesto == '001' and importe:
                                                 total_isr_retenido += Decimal(importe)
                                             if impuesto == '002' and importe:
@@ -141,41 +220,80 @@ class AccountingService:
                                     total_descuento = Decimal('0.00')
                                 break
 
-                        # Successful parse -> return accumulated totals + descuento
+                        # Successful parse -> return accumulated totals + descuento + impuestos locales
                         return (
                             total_iva_trasladado.quantize(Decimal('0.01')),
                             total_isr_retenido.quantize(Decimal('0.01')),
                             total_iva_retenido.quantize(Decimal('0.01')),
-                            total_descuento.quantize(Decimal('0.01'))
+                            total_descuento.quantize(Decimal('0.01')),
+                            total_impuestos_locales.quantize(Decimal('0.01'))  # NUEVO
                         )
                     except Exception:
                         # On any parse error, fall back to stored fields
                         break
 
         # Fallback to fields parsed earlier (if XML not found or error)
-        # Fallback: si no se encuentra XML, intentar usar campos existentes en la factura
+        # Fallback to fields parsed earlier (if XML not found or error)
         return (
-            getattr(factura, 'total_impuestos_trasladados', Decimal('0.00')) or Decimal('0.00'),
-            Decimal('0.00'),
-            getattr(factura, 'total_impuestos_retenidos', Decimal('0.00')) or Decimal('0.00'),
-            getattr(factura, 'descuento', Decimal('0.00')) or Decimal('0.00')
+            factura.total_impuestos_trasladados or Decimal('0.00'),
+            Decimal('0.00'),  # ISR retenido no disponible en campos
+            factura.total_impuestos_retenidos or Decimal('0.00'),
+            getattr(factura, 'descuento', Decimal('0.00')) or Decimal('0.00'),
+            Decimal('0.00')  # Impuestos locales no disponibles en campos
         )
 
     @staticmethod
     def _resolver_cuenta_por_uso_cfdi(empresa, uso_cfdi, factura):
         """
         Resuelve la cuenta contable basándose en el UsoCFDI del SAT.
+        Para G03 (Gastos Generales), usa clasificación inteligente por concepto.
         Crea la cuenta automáticamente si no existe.
         
         Args:
             empresa: Empresa
             uso_cfdi: Código UsoCFDI (G01, G03, I04, etc.)
-            factura: Factura (para logging)
+            factura: Factura (para logging y clasificación)
         
         Returns:
             CuentaContable: Cuenta resuelta o creada
         """
-        # Obtener configuración del mapa SAT
+        # CLASIFICACIÓN INTELIGENTE para G03 (Gastos Generales)
+        if uso_cfdi == 'G03':
+            from core.utils.clasificador_gastos import clasificar_gasto_por_concepto
+            
+            # Obtener concepto del primer item del XML (si existe)
+            concepto = ""
+            try:
+                # Intentar obtener concepto de la descripción de la factura
+                # o del primer concepto del XML
+                concepto = getattr(factura, 'concepto', '') or ""
+            except:
+                concepto = ""
+            
+            # Clasificar por concepto
+            codigo_cuenta = clasificar_gasto_por_concepto(
+                concepto=concepto,
+                emisor_rfc=factura.emisor_rfc
+            )
+            
+            logger.info(
+                f"🎯 Clasificación inteligente: '{concepto[:50]}' → {codigo_cuenta}"
+            )
+            
+            # Buscar la cuenta clasificada
+            try:
+                cuenta = CuentaContable.objects.get(
+                    empresa=empresa,
+                    codigo=codigo_cuenta
+                )
+                return cuenta
+            except CuentaContable.DoesNotExist:
+                # Si no existe, usar el default G03
+                logger.warning(
+                    f"⚠️  Cuenta {codigo_cuenta} no existe, usando default G03"
+                )
+        
+        # Obtener configuración del mapa SAT (para otros UsoCFDI)
         config = get_account_config(uso_cfdi)
         
         # Buscar o crear la cuenta
@@ -284,7 +402,7 @@ class AccountingService:
             # porque facturas de egreso pueden tener tipo_comprobante='I' en el XML
             movs = []
             # Acumular impuestos leyendo el XML original si existe (más robusto)
-            total_iva_trasladado, total_isr_retenido, total_iva_retenido, total_descuento = AccountingService._accumulate_impuestos_from_xml(factura)
+            total_iva_trasladado, total_isr_retenido, total_iva_retenido, total_descuento, total_impuestos_locales = AccountingService._accumulate_impuestos_from_xml(factura)
 
             # --- AUDITORÍA 360°: calcular y validar componentes clave del comprobante
             # Subtotal real: suma de importes en conceptos (fallback a factura.subtotal)
@@ -297,8 +415,8 @@ class AccountingService:
             # Traslados: solo Impuesto='002' (IVA) acumulado desde XML helper
             total_traslados = total_iva_trasladado or Decimal('0.00')
 
-            # Retenciones: ISR (001) + IVA (002)
-            total_retenciones = (total_isr_retenido or Decimal('0.00')) + (total_iva_retenido or Decimal('0.00'))
+            # Retenciones: ISR (001) + IVA (002) + Impuestos Locales
+            total_retenciones = (total_isr_retenido or Decimal('0.00')) + (total_iva_retenido or Decimal('0.00')) + (total_impuestos_locales or Decimal('0.00'))
 
             # Gran total esperado por la póliza = Subtotal + Traslados - Retenciones - Descuento
             gran_total = (total_subtotal + total_traslados - total_retenciones - (total_descuento or Decimal('0.00'))).quantize(Decimal('0.01'))
@@ -573,9 +691,17 @@ class AccountingService:
                 
                 # Abono a Flujo (Proveedores/Banco) -> Total
                 # Manejo de retenciones: si existen, registrar Pasivo por Retenciones
+                # Las variables total_isr_retenido, total_iva_retenido, total_iva_trasladado, total_descuento
+                # ya fueron calculadas en línea 332 desde _accumulate_impuestos_from_xml()
+                # NO re-inicializar aquí para evitar pérdida de valores
+
+                # Calcular retenciones si existen
                 retenciones = (total_isr_retenido or Decimal('0.00')) + (total_iva_retenido or Decimal('0.00'))
 
-                if retenciones and retenciones != Decimal('0.00'):
+                # Log de auditoría
+                logger.info(f"Retenciones calculadas: {retenciones}")
+
+                if retenciones != Decimal('0.00'):
                     # Buscar/crear cuenta de Retenciones por Pagar (preferencia 213-01)
                     retenidos_cta, created = CuentaContable.objects.get_or_create(
                         empresa=factura.empresa,
@@ -719,52 +845,66 @@ class AccountingService:
                             descripcion='Descuento (XML) - registrado automáticamente'
                         ))
 
-            # Revertir ajustes en cuentas sensibles (Retenciones e IVA)
-            if total_iva_trasladado > 0:
-                if plantilla.cuenta_impuesto:
-                    movs.append(MovimientoPoliza(
-                        poliza=poliza, cuenta=plantilla.cuenta_impuesto, 
-                        debe=total_iva_trasladado, haber=0, 
-                        descripcion="IVA Acreditable"
-                    ))
-                else:
-                    raise ValueError("La factura tiene impuestos pero la plantilla no tiene cuenta de impuestos configurada.")
 
-            if retenciones > 0:
-                cuenta_retenciones, _ = CuentaContable.objects.get_or_create(
-                    empresa=factura.empresa,
-                    codigo='213-01',
-                    defaults={'nombre': 'Retenciones por Pagar', 'tipo': 'PASIVO', 'nivel': 1}
-                )
-                movs.append(MovimientoPoliza(
-                    poliza=poliza, cuenta=cuenta_retenciones,
-                    debe=0, haber=retenciones,
-                    descripcion="Retenciones por Pagar"
-                ))
+            # 5. Validar Cuadre con Umbral de Ajuste
+            # Permitir ajustes SOLO para redondeos reales (< $1.00)
+            # Rechazar diferencias grandes que indican errores de contabilización
 
-            # Ajuste final en cuenta de resultados para garantizar cuadre
             total_debe = sum(mov.debe for mov in movs)
             total_haber = sum(mov.haber for mov in movs)
             diferencia = total_debe - total_haber
 
+            # Umbral de $1.00 para ajustes automáticos
+            UMBRAL_AJUSTE = Decimal('1.00')
+            
             if abs(diferencia) > Decimal('0.01'):
-                cuenta_ajuste, _ = CuentaContable.objects.get_or_create(
-                    empresa=factura.empresa,
-                    codigo='702-99',  # Código estándar para ajustes por redondeo
-                    defaults={'nombre': 'Ajuste por Diferencias de Redondeo', 'tipo': 'RESULTADO', 'nivel': 1}
-                )
-                if diferencia > 0:
-                    movs.append(MovimientoPoliza(
-                        poliza=poliza, cuenta=cuenta_ajuste,
-                        debe=0, haber=abs(diferencia),
-                        descripcion="Ajuste por Redondeo"
-                    ))
+                # Hay diferencia, verificar si es ajustable
+                
+                if abs(diferencia) > UMBRAL_AJUSTE:
+                    # Diferencia GRANDE - ERROR en contabilización
+                    logger.error(
+                        f"❌ Póliza no cuadra para factura {factura.uuid}: "
+                        f"Debe=${total_debe:.2f}, Haber=${total_haber:.2f}, Diff=${diferencia:.2f}"
+                    )
+                    raise ValueError(
+                        f"La póliza no cuadra (diferencia: ${abs(diferencia):.2f}). "
+                        f"Esta diferencia excede el umbral de ajuste de ${UMBRAL_AJUSTE:.2f}. "
+                        f"Revise la plantilla o los datos de la factura {factura.uuid}. "
+                        f"NO se permiten ajustes automáticos para diferencias grandes."
+                    )
                 else:
-                    movs.append(MovimientoPoliza(
-                        poliza=poliza, cuenta=cuenta_ajuste,
-                        debe=abs(diferencia), haber=0,
-                        descripcion="Ajuste por Redondeo"
-                    ))
+                    # Diferencia PEQUEÑA - Ajuste de redondeo permitido
+                    logger.warning(
+                        f"⚠️ Ajuste de redondeo aplicado para factura {factura.uuid}: "
+                        f"${abs(diferencia):.2f}"
+                    )
+                    
+                    # Crear cuenta de ajuste si no existe
+                    cuenta_ajuste, _ = CuentaContable.objects.get_or_create(
+                        empresa=factura.empresa,
+                        codigo='702-99',
+                        defaults={
+                            'nombre': 'Ajuste por Diferencias de Redondeo',
+                            'tipo': 'GASTO',
+                            'naturaleza': 'A',
+                            'nivel': 3,
+                            'codigo_sat': '999-99'
+                        }
+                    )
+                    
+                    # Aplicar ajuste
+                    if diferencia > 0:
+                        movs.append(MovimientoPoliza(
+                            poliza=poliza, cuenta=cuenta_ajuste,
+                            debe=0, haber=abs(diferencia),
+                            descripcion=f"Ajuste de Redondeo (${abs(diferencia):.2f})"
+                        ))
+                    else:
+                        movs.append(MovimientoPoliza(
+                            poliza=poliza, cuenta=cuenta_ajuste,
+                            debe=abs(diferencia), haber=0,
+                            descripcion=f"Ajuste de Redondeo (${abs(diferencia):.2f})"
+                        ))
 
             # Validate Debe == Haber
             total_debe = sum(mov.debe for mov in movs)

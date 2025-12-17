@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.db.models import Sum, Q, F
 from django.db import transaction  # <--- MODIFICACIÓN 1: Importar la funcionalidad de transacciones
-from django.http import FileResponse
+from django.http import FileResponse, HttpResponse, HttpResponseBadRequest
 from .forms import UploadXMLForm
 from .services.xml_processor import procesar_xml_cfdi
 from .services.accounting_service import AccountingService
@@ -13,9 +13,10 @@ from .models import Factura, Empresa, CuentaContable, UsuarioEmpresa, Movimiento
 from .decorators import require_active_empresa
 import logging
 import os
-from django.http import FileResponse, HttpResponseBadRequest
 from .services.export_service import ExportService
 import datetime
+import openpyxl
+from openpyxl.styles import Alignment
 
 logger = logging.getLogger(__name__)
 
@@ -436,7 +437,15 @@ def ver_pdf(request, pk):
 @login_required
 @require_active_empresa
 def eliminar_factura(request, pk):
-    """Vista para eliminar factura"""
+    """
+    Vista para eliminar factura con cascada controlada y auditoría
+    
+    Proceso:
+    1. Validar permisos
+    2. Verificar dependencias (póliza contable)
+    3. Registrar en auditoría
+    4. Eliminar en cascada: Póliza → Movimientos → Factura → Archivo XML
+    """
     empresa = request.empresa
     
     # Validar Rol (Lectura NO borra)
@@ -448,11 +457,83 @@ def eliminar_factura(request, pk):
     factura = get_object_or_404(Factura, uuid=pk, empresa=empresa)
     
     if request.method == 'POST':
-        factura.delete()
-        messages.success(request, "Factura eliminada correctamente.")
-        return redirect('dashboard')
+        from django.db import transaction
+        from core.models import Poliza, AuditoriaEliminacion
+        import os
         
-    return render(request, 'core/confirm_delete.html', {'object': factura})
+        try:
+            with transaction.atomic():
+                # 1. Verificar si tiene póliza contable
+                tiene_poliza = False
+                try:
+                    poliza = Poliza.objects.get(factura=factura)
+                    tiene_poliza = True
+                except Poliza.DoesNotExist:
+                    poliza = None
+                
+                # 2. Crear registro de auditoría ANTES de eliminar
+                auditoria = AuditoriaEliminacion.objects.create(
+                    uuid_factura=factura.uuid,
+                    folio=factura.folio,
+                    emisor_nombre=factura.emisor_nombre,
+                    receptor_nombre=factura.receptor_nombre,
+                    total=factura.total,
+                    fecha_factura=factura.fecha,
+                    usuario=request.user,
+                    tenia_poliza=tiene_poliza,
+                    motivo=request.POST.get('motivo', '')
+                )
+                
+                # 3. Eliminar póliza (CASCADE eliminará MovimientoPoliza automáticamente)
+                if poliza:
+                    poliza.delete()
+                
+                # 4. Eliminar archivo XML físico si existe
+                if factura.archivo_xml:
+                    try:
+                        if os.path.isfile(factura.archivo_xml.path):
+                            os.remove(factura.archivo_xml.path)
+                    except Exception as e:
+                        # Log pero no fallar si el archivo no existe
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"No se pudo eliminar archivo XML: {e}")
+                
+                # 5. Eliminar factura de la base de datos
+                factura_info = f"{factura.folio} - {factura.emisor_nombre}"
+                factura.delete()
+                
+                messages.success(
+                    request, 
+                    f"✅ Factura {factura_info} eliminada correctamente. "
+                    f"{'Póliza contable también eliminada.' if tiene_poliza else ''}"
+                )
+                
+                return redirect('dashboard')
+                
+        except Exception as e:
+            messages.error(request, f"❌ Error al eliminar factura: {str(e)}")
+            return redirect('factura_detail', pk=pk)
+    
+    # GET: Mostrar confirmación con información de dependencias
+    from core.models import Poliza
+    
+    try:
+        poliza = Poliza.objects.get(factura=factura)
+        tiene_poliza = True
+        num_movimientos = poliza.movimientopoliza_set.count()
+    except Poliza.DoesNotExist:
+        tiene_poliza = False
+        num_movimientos = 0
+    
+    context = {
+        'object': factura,
+        'factura': factura,
+        'tiene_poliza': tiene_poliza,
+        'num_movimientos': num_movimientos,
+    }
+    
+    return render(request, 'core/confirm_delete.html', context)
 
 @method_decorator(login_required, name='dispatch')
 class BandejaContabilizacionView(ListView):
@@ -687,3 +768,45 @@ def cumplimiento_sat_download(request):
     except Exception as e:
         logger.error(f"Error generating export {doc}.{fmt} for {empresa}: {e}", exc_info=True)
         return HttpResponseBadRequest(str(e))
+
+@login_required
+@require_active_empresa
+def exportar_estado_facturas_a_excel(request):
+    """Genera un archivo Excel consolidado de todas las facturas."""
+    empresa = request.empresa
+    facturas = Factura.objects.filter(empresa=empresa).values(
+        'uuid', 'fecha', 'emisor_rfc', 'emisor_nombre', 'receptor_rfc', 'receptor_nombre', 'total', 'tipo_comprobante', 'estado_contable'
+    )
+
+    # Crear el archivo Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Estado de Facturas"
+
+    # Encabezados
+    headers = ["UUID", "Fecha", "RFC Emisor", "Nombre Emisor", "RFC Receptor", "Nombre Receptor", "Total", "Tipo", "Estado"]
+    ws.append(headers)
+
+    for col in ws.iter_cols(min_row=1, max_row=1, min_col=1, max_col=len(headers)):
+        for cell in col:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Agregar datos
+    for factura in facturas:
+        ws.append([
+            str(factura['uuid']),
+            factura['fecha'].strftime('%Y-%m-%d'),
+            factura['emisor_rfc'],
+            factura['emisor_nombre'],
+            factura['receptor_rfc'],
+            factura['receptor_nombre'],
+            f"{factura['total']:.2f}",
+            factura['tipo_comprobante'],
+            factura['estado_contable']
+        ])
+
+    # Respuesta HTTP con el archivo Excel
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="estado_facturas_{empresa.nombre}.xlsx"'
+    wb.save(response)
+    return response

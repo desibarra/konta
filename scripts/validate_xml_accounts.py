@@ -7,7 +7,7 @@ Salida: informe en consola con discrepancias por UUID.
 """
 import os
 import sys
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import xml.etree.ElementTree as ET
 
 if __name__ == '__main__':
@@ -57,12 +57,24 @@ if __name__ == '__main__':
                             imp_amt = item.attrib.get('Importe') or item.attrib.get('importe')
                             if imp and imp_amt:
                                 if imp == '002':
-                                    iva_trasladado += Decimal(imp_amt)
+                                    try:
+                                        imp_amt = Decimal(imp_amt)
+                                    except (ValueError, TypeError, InvalidOperation):
+                                        print(f"Valor inválido para importe: {imp_amt}")
+                                        continue
+
+                                    iva_trasladado += imp_amt
                     else:
                         imp = t.attrib.get('Impuesto') or t.attrib.get('impuesto')
                         imp_amt = t.attrib.get('Importe') or t.attrib.get('importe')
                         if imp == '002' and imp_amt:
-                            iva_trasladado += Decimal(imp_amt)
+                            try:
+                                imp_amt = Decimal(imp_amt)
+                            except (ValueError, TypeError, InvalidOperation):
+                                print(f"Valor inválido para importe: {imp_amt}")
+                                continue
+
+                            iva_trasladado += imp_amt
 
             # Retenciones
             for r in impuestos:
@@ -74,17 +86,41 @@ if __name__ == '__main__':
                             imp_amt = item.attrib.get('Importe') or item.attrib.get('importe')
                             if imp and imp_amt:
                                 if imp == '001':
-                                    isr_retenido += Decimal(imp_amt)
+                                    try:
+                                        imp_amt = Decimal(imp_amt)
+                                    except (ValueError, TypeError, InvalidOperation):
+                                        print(f"Valor inválido para importe: {imp_amt}")
+                                        continue
+
+                                    isr_retenido += imp_amt
                                 if imp == '002':
-                                    iva_retenido += Decimal(imp_amt)
+                                    try:
+                                        imp_amt = Decimal(imp_amt)
+                                    except (ValueError, TypeError, InvalidOperation):
+                                        print(f"Valor inválido para importe: {imp_amt}")
+                                        continue
+
+                                    iva_retenido += imp_amt
                     else:
                         imp = r.attrib.get('Impuesto') or r.attrib.get('impuesto')
                         imp_amt = r.attrib.get('Importe') or r.attrib.get('importe')
                         if imp and imp_amt:
                             if imp == '001':
-                                isr_retenido += Decimal(imp_amt)
+                                try:
+                                    imp_amt = Decimal(imp_amt)
+                                except (ValueError, TypeError, InvalidOperation):
+                                    print(f"Valor inválido para importe: {imp_amt}")
+                                    continue
+
+                                isr_retenido += imp_amt
                             if imp == '002':
-                                iva_retenido += Decimal(imp_amt)
+                                try:
+                                    imp_amt = Decimal(imp_amt)
+                                except (ValueError, TypeError, InvalidOperation):
+                                    print(f"Valor inválido para importe: {imp_amt}")
+                                    continue
+
+                                iva_retenido += imp_amt
 
         # Además, buscar traslados/retenciones dentro de conceptos
         for concepto in root.iter():
@@ -98,12 +134,24 @@ if __name__ == '__main__':
                             imp = t.attrib.get('Impuesto') or t.attrib.get('impuesto')
                             imp_amt = t.attrib.get('Importe') or t.attrib.get('importe')
                             if imp == '002' and imp_amt:
-                                iva_trasladado += Decimal(imp_amt)
+                                try:
+                                    imp_amt = Decimal(imp_amt)
+                                except (ValueError, TypeError, InvalidOperation):
+                                    print(f"Valor inválido para importe: {imp_amt}")
+                                    continue
+
+                                iva_trasladado += imp_amt
                     else:
                         imp = c.attrib.get('Impuesto') or c.attrib.get('impuesto')
                         imp_amt = c.attrib.get('Importe') or c.attrib.get('importe')
                         if imp == '002' and imp_amt:
-                            iva_trasladado += Decimal(imp_amt)
+                            try:
+                                imp_amt = Decimal(imp_amt)
+                            except (ValueError, TypeError, InvalidOperation):
+                                print(f"Valor inválido para importe: {imp_amt}")
+                                continue
+
+                            iva_trasladado += imp_amt
                 if tagc in ('retencion', 'retenciones'):
                     if tagc == 'retenciones':
                         for r in c:
@@ -111,17 +159,41 @@ if __name__ == '__main__':
                             imp_amt = r.attrib.get('Importe') or r.attrib.get('importe')
                             if imp and imp_amt:
                                 if imp == '001':
-                                    isr_retenido += Decimal(imp_amt)
+                                    try:
+                                        imp_amt = Decimal(imp_amt)
+                                    except (ValueError, TypeError, InvalidOperation):
+                                        print(f"Valor inválido para importe: {imp_amt}")
+                                        continue
+
+                                    isr_retenido += imp_amt
                                 if imp == '002':
-                                    iva_retenido += Decimal(imp_amt)
+                                    try:
+                                        imp_amt = Decimal(imp_amt)
+                                    except (ValueError, TypeError, InvalidOperation):
+                                        print(f"Valor inválido para importe: {imp_amt}")
+                                        continue
+
+                                    iva_retenido += imp_amt
                     else:
                         imp = c.attrib.get('Impuesto') or c.attrib.get('impuesto')
                         imp_amt = c.attrib.get('Importe') or c.attrib.get('importe')
                         if imp and imp_amt:
                             if imp == '001':
-                                isr_retenido += Decimal(imp_amt)
+                                try:
+                                    imp_amt = Decimal(imp_amt)
+                                except (ValueError, TypeError, InvalidOperation):
+                                    print(f"Valor inválido para importe: {imp_amt}")
+                                    continue
+
+                                isr_retenido += imp_amt
                             if imp == '002':
-                                iva_retenido += Decimal(imp_amt)
+                                try:
+                                    imp_amt = Decimal(imp_amt)
+                                except (ValueError, TypeError, InvalidOperation):
+                                    print(f"Valor inválido para importe: {imp_amt}")
+                                    continue
+
+                                iva_retenido += imp_amt
 
         return uuid, iva_trasladado.quantize(Decimal('0.01')), isr_retenido.quantize(Decimal('0.01')), iva_retenido.quantize(Decimal('0.01'))
 

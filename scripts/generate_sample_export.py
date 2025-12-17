@@ -1,9 +1,10 @@
 import os
-from django.conf import settings
 import django
 
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'konta.settings')
 django.setup()
 
+from django.conf import settings
 from core.services.export_service import ExportService
 from core.models import Empresa
 

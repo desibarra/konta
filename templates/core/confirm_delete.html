@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        Confirmar Eliminación
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <h5 class="alert-heading">⚠️ Advertencia de Seguridad</h5>
+                        <p class="mb-0">
+                            Esta acción eliminará <strong>permanentemente</strong> el XML y todos sus registros
+                            asociados.
+                            <strong>Esta acción no se puede deshacer.</strong>
+                        </p>
+                    </div>
+
+                    <h5 class="mt-4 mb-3">Información del XML a eliminar:</h5>
+
+                    <table class="table table-bordered">
+                        <tr>
+                            <th style="width: 30%;">UUID (SAT)</th>
+                            <td><code>{{ factura.uuid }}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Folio</th>
+                            <td>{{ factura.folio }}</td>
+                        </tr>
+                        <tr>
+                            <th>Fecha</th>
+                            <td>{{ factura.fecha }}</td>
+                        </tr>
+                        <tr>
+                            <th>Emisor</th>
+                            <td>{{ factura.emisor_nombre }} ({{ factura.emisor_rfc }})</td>
+                        </tr>
+                        <tr>
+                            <th>Receptor</th>
+                            <td>{{ factura.receptor_nombre }} ({{ factura.receptor_rfc }})</td>
+                        </tr>
+                        <tr>
+                            <th>Total</th>
+                            <td class="fw-bold">${{ factura.total|floatformat:2 }}</td>
+                        </tr>
+                    </table>
+
+                    {% if tiene_poliza %}
+                    <div class="alert alert-danger mt-3">
+                        <h6 class="alert-heading">
+                            <i class="bi bi-journal-x"></i>
+                            Impacto Contable
+                        </h6>
+                        <p class="mb-2">Esta factura tiene una <strong>póliza contable asociada</strong>.</p>
+                        <p class="mb-0">
+                            Se eliminarán:
+                        </p>
+                        <ul class="mb-0">
+                            <li>1 Póliza Contable</li>
+                            <li>{{ num_movimientos }} Movimientos Contables</li>
+                            <li>Registro del XML en la base de datos</li>
+                            <li>Archivo XML físico del almacenamiento</li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i>
+                        Esta factura <strong>no tiene póliza contable</strong> asociada.
+                    </div>
+                    {% endif %}
+
+                    <form method="post" class="mt-4">
+                        {% csrf_token %}
+
+                        <div class="mb-3">
+                            <label for="motivo" class="form-label">
+                                Motivo de eliminación (opcional):
+                            </label>
+                            <textarea name="motivo" id="motivo" class="form-control" rows="3"
+                                placeholder="Ej: Factura duplicada, error en carga, etc."></textarea>
+                            <small class="text-muted">
+                                Este motivo quedará registrado en la auditoría.
+                            </small>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="confirmacion" required>
+                            <label class="form-check-label" for="confirmacion">
+                                Confirmo que entiendo que esta acción es <strong>irreversible</strong>
+                            </label>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'factura_detail' factura.uuid %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash-fill"></i> Eliminar Permanentemente
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mt-3 border-info">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="bi bi-shield-check"></i>
+                        Registro de Auditoría
+                    </h6>
+                    <p class="card-text small text-muted mb-0">
+                        Esta eliminación quedará registrada en el sistema de auditoría con:
+                    </p>
+                    <ul class="small text-muted mb-0">
+                        <li>Usuario que realizó la eliminación</li>
+                        <li>Fecha y hora exacta</li>
+                        <li>UUID del SAT eliminado</li>
+                        <li>Motivo proporcionado</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
